@@ -1,0 +1,28 @@
+{
+  "name": "pickens-my-jeanty-draft-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {"node": ">=20"},
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "rank:demo": "tsx src/index.ts rank-demo",
+    "cbs:monitor": "tsx src/index.ts cbs-monitor"
+  },
+  "dependencies": {
+    "dotenv": "^16.6.1",
+    "openai": "7.4.0",
+    "playwright": "1.62.1",
+    "xlsx": "0.18.5",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  }
+}

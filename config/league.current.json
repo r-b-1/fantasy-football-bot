@@ -1,0 +1,44 @@
+{
+  "platform": "CBS",
+  "season": 2026,
+  "leagueName": "All in the Family FFBL",
+  "userTeamName": "Front Runner",
+  "fantasyDisplayName": "Pickens My Jeanty",
+  "teamCount": 16,
+  "scoringFormat": "PPR",
+  "draftType": "snake",
+  "draftTypeVerificationRequired": true,
+  "draftSlot": 3,
+  "keeperSlots": 2,
+  "keepers": [
+    {"name": "Ashton Jeanty", "position": "RB"},
+    {"name": "George Pickens", "position": "WR"}
+  ],
+  "completedTrades": [
+    {
+      "description": "Kenneth Walker III + overall pick 62 for overall pick 21",
+      "sentPlayers": ["Kenneth Walker III"],
+      "sentOverallPicks": [62],
+      "receivedOverallPicks": [21]
+    }
+  ],
+  "knownOverallPicks": [3, 21, 30, 35, 67, 94, 99, 126, 131, 158],
+  "knownPicksArePartial": true,
+  "lineup": {
+    "QB": 1,
+    "RB": 2,
+    "WR": 3,
+    "TE": 1,
+    "K": 1,
+    "DST": 1
+  },
+  "benchSlots": null,
+  "rosterMaximums": {},
+  "executionMode": "recommend",
+  "cbsExecutionEnabled": false,
+  "notes": [
+    "Lineup was inferred from roster screenshots and should be verified in CBS settings.",
+    "Exact late-round pick inventory should be re-read from CBS before the live draft.",
+    "Official league-wide keepers are not yet populated; update after keeper lock."
+  ]
+}

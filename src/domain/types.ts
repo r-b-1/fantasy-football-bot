@@ -1,0 +1,138 @@
+export const POSITIONS = ["QB", "RB", "WR", "TE", "K", "DST"] as const;
+export type Position = (typeof POSITIONS)[number];
+
+export type ExecutionMode = "monitor" | "recommend" | "confirm" | "autopilot";
+
+export interface SportslinePlayer {
+  id: string;
+  sourceName: string;
+  name: string;
+  position: Position;
+  sportslineRating: number;
+  adp: number | null;
+  listedRound: number | null;
+  byeWeek: number | null;
+}
+
+export interface LivePlayer extends SportslinePlayer {
+  nflTeam?: string;
+  cbsPlayerId?: string;
+  projectedPoints?: number;
+  cbsPositionRank?: number;
+  available: boolean;
+}
+
+export interface KeeperRef {
+  name: string;
+  position: Position;
+}
+
+export interface LeagueConfig {
+  platform: "CBS";
+  season: number;
+  leagueName: string;
+  userTeamName: string;
+  fantasyDisplayName: string;
+  teamCount: number;
+  scoringFormat: "PPR" | "HALF_PPR" | "NON_PPR";
+  draftType: "snake" | "linear";
+  draftTypeVerificationRequired: boolean;
+  draftSlot: number;
+  keeperSlots: number;
+  keepers: KeeperRef[];
+  knownOverallPicks: number[];
+  knownPicksArePartial: boolean;
+  lineup: Record<Position, number>;
+  benchSlots: number | null;
+  rosterMaximums: Partial<Record<Position, number>>;
+  executionMode: ExecutionMode;
+  cbsExecutionEnabled: boolean;
+  notes: string[];
+}
+
+export interface StrategyConfig {
+  candidateShortlistSize: number;
+  aiConfidenceThreshold: number;
+  aiTimeoutMs: number;
+  minimumExecutionClockSeconds: number;
+  freshStateMaxAgeMs: number;
+  weights: {
+    sportslineRating: number;
+    adpValue: number;
+    rosterNeed: number;
+    scarcity: number;
+    nextPickRisk: number;
+    tierCliff: number;
+  };
+  earlyRoundPositionPenalties: Partial<Record<Position, number>>;
+  softDraftPlan: Record<string, string>;
+  notes: string[];
+}
+
+export interface DraftPickEvent {
+  overallPick: number;
+  round?: number;
+  fantasyTeam: string;
+  playerId: string;
+  playerName: string;
+  position?: Position;
+  nflTeam?: string;
+  observedAt: string;
+}
+
+export interface UserRoster {
+  players: Array<{
+    playerId: string;
+    name: string;
+    position: Position;
+    source: "keeper" | "draft";
+  }>;
+}
+
+export interface DraftState {
+  currentOverallPick: number;
+  nextUserOverallPick: number | null;
+  teamOnClock: string | null;
+  isUserTurn: boolean;
+  clockSecondsRemaining: number | null;
+  snapshotAt: string;
+  roster: UserRoster;
+  draftEvents: DraftPickEvent[];
+  availablePlayerIds: Set<string>;
+  recentPositionCounts: Partial<Record<Position, number>>;
+}
+
+export interface CandidateComponentScores {
+  sportslineRating: number;
+  adpValue: number;
+  rosterNeed: number;
+  scarcity: number;
+  nextPickRisk: number;
+  tierCliff: number;
+  vor?: number;
+  penalties: number;
+}
+
+export interface CandidateScore {
+  player: LivePlayer;
+  score: number;
+  components: CandidateComponentScores;
+  notes: string[];
+}
+
+export interface DraftDecision {
+  selectedCandidateId: string;
+  confidence: number;
+  rationale: string;
+  alternativeCandidateIds: string[];
+  riskFlags: Array<
+    | "NONE"
+    | "POSITION_RUN"
+    | "TIER_CLIFF"
+    | "ROSTER_IMBALANCE"
+    | "BYE_OVERLAP"
+    | "LOW_CONFIDENCE"
+    | "STALE_DATA"
+  >;
+  source: "ai" | "deterministic_fallback";
+}

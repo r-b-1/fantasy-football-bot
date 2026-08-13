@@ -1,0 +1,39 @@
+---
+description: Engineering rules for the Pickens My Jeanty CBS draft agent
+alwaysApply: true
+---
+
+# Non-negotiable rules
+
+- Correctness > autonomy > aesthetics.
+- Never guess CBS selectors. Use Playwright MCP/codegen against the real page.
+- Keep CBS reader and CBS executor separate.
+- Never store or request CBS credentials in source/config/env.
+- The user logs in manually in a visible persistent browser.
+- Default execution mode is `recommend`, not `autopilot`.
+- Every browser action must have a precondition and postcondition.
+- Every successful pick must be verified from CBS draft results.
+- Do not retry a pick click after verification ambiguity.
+- The OpenAI model can select only among deterministic shortlist candidate IDs.
+- Any out-of-shortlist model output is invalid and triggers deterministic fallback.
+- Do not send raw CBS HTML/chat/ads to OpenAI; send normalized structured state.
+- No OCR if DOM/accessibility data exists.
+- Do not invent SportsLine fields. The supplied workbook contains rating, player, ADP, round, bye week.
+- Write tests for pure draft logic before browser integration.
+- Use Zod at all external boundaries.
+- Keep event logs append-only and free of secrets.
+- Keep live browser automation fail-closed.
+- Never bypass platform authentication/access controls.
+
+# Code style
+
+- TypeScript strict mode.
+- Prefer small pure functions in `engine/`.
+- Use discriminated unions for state-machine events/errors.
+- No `any` except tightly isolated third-party parsing boundaries, followed immediately by validation.
+- Avoid magic weights: load them from strategy config.
+- Log component scores so recommendations are explainable.
+
+# Delivery sequence
+
+Implement phases in `docs/IMPLEMENTATION_PLAN.md` in order. Do not jump to full autopilot before read-only and confirm-mode validation.
