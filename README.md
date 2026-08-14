@@ -1,106 +1,208 @@
-# Pickens My Jeanty — CBS Fantasy Draft Agent
+# Fantasy Draft Agent
 
-A local-first draft assistant/autopilot prototype for a **16-team CBS Fantasy Football keeper league**. The project is designed around the user's real league, current draft capital, two keepers, and the SportsLine CBS PPR 12-team spreadsheet supplied in this conversation.
+A local-first TypeScript agent for live fantasy football drafts. It reads a CBS draft room, scores remaining players with a deterministic engine, and optionally asks an LLM to choose **only among that shortlist**.
 
-## What this project is meant to do
+Built for a real **16-team PPR keeper league** — unusual draft capital, two keepers, snake-draft timing pressure — where a wrong click is worse than no click.
 
-1. Open a real CBS draft room in a visible browser.
-2. Read live draft state from the page DOM/accessibility tree.
-3. Load the supplied SportsLine rankings and current league configuration.
-4. Maintain an authoritative list of available/drafted/keeper players.
-5. Score candidates deterministically using value, roster need, positional scarcity, ADP, and optional projections.
-6. Ask an OpenAI reasoning model to choose **only among a bounded shortlist** and return a strict structured decision.
-7. Run in one of four modes:
-   - `monitor`: observe only.
-   - `recommend`: show the recommended player and backups.
-   - `confirm`: prepare the pick, but require a human confirmation.
-   - `autopilot`: submit the pick after all safety checks pass.
-8. Verify that CBS recorded the correct player and pick before continuing.
+The interesting part is not that an LLM can pick a player. It is that the LLM is not allowed to invent one, click one, or recover from a failed check by guessing.
 
-## Why the architecture is hybrid instead of “just let AI click”
+```text
+SportsLine XLSX ─┐
+League config ───┼─► deterministic engine ─► shortlist (5–10 IDs)
+CBS draft room ──┘            │
+                              ▼
+                    bounded LLM ranker
+                    (structured output, shortlist-only)
+                              │
+                              ▼
+              recommend / confirm / (gated) execute
+                              │
+                              ▼
+                   verify CBS recorded the pick
+```
 
-The goal is **fewer mistakes**, not maximum autonomy. A pure LLM browser agent can misread a page, click the wrong row, hallucinate an unavailable player, or fail under draft-clock pressure. This design puts deterministic software around the model:
+## Why this exists
 
-- Playwright reads the page.
-- Local state validates the page.
-- A deterministic engine produces a candidate shortlist.
-- The OpenAI model may rank the shortlist, but cannot invent candidates.
-- A separate executor performs the browser action.
-- Post-pick verification must succeed.
-- If any invariant fails, the program stops and falls back to manual/CBS-native drafting.
+A static ranking sheet goes stale after the first few picks. A pure “AI browser agent” can misread the page, hallucinate an unavailable player, or click the wrong row with the clock running.
 
-## Current known league configuration
+This project treats that as a **reliability problem**, not a prompt-engineering problem:
 
-See `config/league.current.json`. The project currently encodes the following information from the conversation:
+- Playwright extracts structured draft state.
+- A pure scoring engine produces an ordered, explainable shortlist.
+- OpenAI may reorder that shortlist. It cannot add a name.
+- A separate executor is the only component allowed to click — and only after safety gates pass.
+- If any invariant fails, the agent **stops**. The human drafts.
 
-- Platform: CBS Fantasy Football Commissioner
-- Teams: 16
-- Scoring format: Head-to-Head Points, PPR
-- Keeper slots: 2
-- User team on CBS: `Pickens My Jeanty` (formerly `Front Runner`; confirm exact spelling/casing in the live draft room)
-- Draft slot: 3rd
-- Current keepers: Ashton Jeanty and George Pickens
-- Completed trade: Kenneth Walker III + overall pick #62 for overall pick #21
-- Starting lineup observed: 1 QB, 2 RB, 3 WR, 1 TE, 1 K, 1 DST
-- Draft is assumed snake/serpentine based on the observed pick numbering. **Verify this before live use.**
+Default live mode is `recommend`, not autopilot.
 
-Known early picks after the trade, assuming no other pick trades:
+## Design that a production system would actually need
 
-`3, 21, 30, 35, 67, 94, 99, 126, 131, 158, ...`
+| Constraint | What the code does |
+| --- | --- |
+| LLMs hallucinate | Model output is Zod-validated. Selected IDs must be in the shortlist. Anything else is discarded and the deterministic #1 is used. |
+| Pages are untrusted | The model receives normalized JSON (player, position, scores, roster). Not HTML, chat, ads, or cookies. |
+| Clicks are irreversible | Reader and executor are separate modules. Live CBS execution is feature-flagged and fail-closed. |
+| Auth is sensitive | No CBS credentials in source, config, or env. The operator logs in manually in a visible persistent browser. |
+| State can lie | Local draft state is reconciled against CBS results. Identity conflicts are surfaced, not silently overwritten. |
+| Timeouts happen | AI timeout, API error, low confidence, or malformed output → deterministic fallback. Never “guess to keep going.” |
+| You only get one submit | Idempotent pick IDs. Duplicate submit is rejected. A wrong-player verification disables the executor. |
 
-The full late-round list depends on how CBS handles roster size/keeper-round accounting, so the live CBS page is the source of truth.
+Scoring weights live in config, not magic numbers. Every recommendation logs component scores so a pick is explainable: SportsLine rating, ADP value, roster need, scarcity, next-pick risk, tier cliff, and penalties.
 
-## Included reference files
+## Architecture
 
-- `data/reference/cheatsheet_cbsppr12.xlsx` — supplied SportsLine CBS PPR 12-team sheet.
-- `data/reference/roster-grid.csv` — supplied league roster grid snapshot.
-- `data/reference/Pickens_My_Jeanty_Draft_Command_Center.xlsx` — previously generated human-readable backup plan.
+```mermaid
+flowchart TB
+  subgraph sources [Inputs]
+    XLSX[SportsLine rankings]
+    CFG[League + strategy config]
+    CBS[CBS draft room]
+  end
 
-The SportsLine workbook contains one sheet per position (`QB`, `RB`, `WR`, `TE`, `K`, `DST`) and these columns:
+  subgraph process [Local Node.js + TypeScript]
+    IMP[Zod-validated importers]
+    STATE[Draft state + JSONL event log]
+    ENG[Pure scoring engine]
+    AI[OpenAI structured decision]
+    READ[CBS reader]
+    EXEC[CBS executor]
+  end
 
-- `OPTIMAL POSITION RATING`
-- `PLAYER`
-- `ADP`
-- `ROUND`
-- `BYE WEEK`
+  XLSX --> IMP
+  CFG --> IMP
+  CBS --> READ
+  IMP --> STATE
+  READ --> STATE
+  STATE --> ENG
+  ENG -->|candidate IDs only| AI
+  AI --> EXEC
+  ENG --> EXEC
+  EXEC -->|verify result| STATE
+```
 
-It does **not** contain projected fantasy points. If the draft engine wants VOR based on projected points, those projections must come from the CBS draft-room DOM or another explicitly configured source.
+The engine is fully unit-testable with no browser and no network. Browser automation is an adapter around that core, not the core itself.
 
-## Start here in Cursor
+### Execution modes
 
-Open this folder in Cursor and read:
+| Mode | Behavior |
+| --- | --- |
+| `monitor` | Read and log the live room. No recommendation, no click. |
+| `recommend` | Rank + explain. Default. |
+| `confirm` | Prepare the pick; a human must confirm. |
+| `autopilot` | Submit only if every safety gate passes. Disabled by default. |
 
-1. `CURSOR_START_HERE.md`
-2. `docs/PRODUCT_REQUIREMENTS.md`
-3. `docs/ARCHITECTURE.md`
-4. `docs/IMPLEMENTATION_PLAN.md`
-5. `.cursor/rules/draft-agent.mdc`
+## What is implemented
 
-Then implement **Phase 1 only** before attempting live pick execution.
+**Decision core**
 
-## Recommended development sequence
+- SportsLine XLSX importer (six position sheets, name normalization, collision reporting)
+- Zod-validated league and strategy config
+- Deterministic scoring, eligibility, and shortlist generation
+- Explainable component notes on every candidate
+- Fixture replay for a 16-team mock draft
 
-- Phase 1: SportsLine importer + league config + deterministic scoring + replay tests.
-- Phase 2: CBS read-only Playwright adapter.
-- Phase 3: Live recommendation overlay/terminal output.
-- Phase 4: Human-confirm pick execution.
-- Phase 5: Native queue maintenance / fallback.
-- Phase 6: Full autopilot after mock-draft validation.
+**Bounded AI layer**
 
-Do not jump directly to Phase 6.
+- OpenAI Responses API + Zod structured outputs
+- Shortlist-membership enforcement
+- Timeout / error / low-confidence fallback to the engine
 
-## Runtime principles
+**CBS integration**
 
-- Never store CBS username/password in code or `.env`.
-- Log in manually in the visible browser and reuse a local Playwright profile.
-- Never guess selectors. Discover them with Playwright MCP/codegen against the actual CBS page.
-- Never allow the AI to choose a player not present in the local shortlist.
-- Never submit if the app cannot prove it is the user's turn.
-- Never submit if the target player is not still available immediately before the click.
-- Never submit twice for the same overall pick.
-- Never treat an AI timeout as permission to guess; fall back to the deterministic top candidate.
-- Keep `autopilot` disabled by default.
+- Playwright persistent context; manual login
+- Domain allowlist
+- Read-only live-room adapter and diagnostics
+- Local fake draft room for executor tests (verified picks, duplicate-submit rejection, wrong-player lockout)
+- Live pick clicking remains gated until mock-draft validation — on purpose
 
-## Important platform note
+**Observability**
 
-CBS documents its own draft queue and Autopilot features, but this project does not assume that CBS exposes a supported public endpoint for submitting draft picks. The implementation therefore treats the CBS web UI as the integration boundary unless a supported API is later verified. Browser automation should remain user-controlled and should be enabled only after the user is comfortable with the platform/league rules.
+- Append-only JSONL event log
+- Secret-like keys stripped before write
+
+## Tech stack
+
+TypeScript (strict) · Node.js 20+ · Playwright · OpenAI SDK · Zod · Vitest · xlsx
+
+## Quick start
+
+```bash
+npm install
+npm test
+npm run typecheck
+```
+
+Rank a frozen draft snapshot (no browser, no API key):
+
+```bash
+npm run rank:fixture -- fixtures/pick-21.json
+```
+
+Demo the engine against the current league config and SportsLine sheet:
+
+```bash
+npm run rank:demo
+```
+
+Optional AI ranking on a fixture (needs `OPENAI_API_KEY` in a local `.env`; copy `.env.example`):
+
+```bash
+npm run decide:fixture -- fixtures/pick-21.json
+```
+
+Read-only CBS monitor — opens a visible browser; you log in yourself:
+
+```bash
+npm run cbs:monitor
+```
+
+Do not put a CBS password in `.env`. The only optional secret is an OpenAI API key.
+
+## Tests
+
+The test suite is the contract:
+
+- Importer correctness (blank rows, DST names, null ADP vs `0`, duplicate keys)
+- Scoring invariants (ADP value, roster need, early K/DST penalty, roster-max exclusion, determinism)
+- AI validator rejects out-of-shortlist IDs, duplicate alternatives, and low confidence
+- Decision layer falls back on timeout, API error, and malformed output
+- Fixture replay is stable at known picks
+- Fake-room executor verifies ten picks, then refuses a second submit and a wrong-player recovery
+- Event log is append-only and redacts secret-shaped fields
+
+```bash
+npm test
+```
+
+## Project layout
+
+```text
+src/
+  engine/     pure draft logic — scoring, eligibility, shortlist, explain
+  ai/         bounded OpenAI decision + Zod validation
+  cbs/        Playwright reader, executor, allowlist, fixture room
+  data/       SportsLine importer and name normalization
+  config/     Zod schemas and loaders
+  domain/     types and typed errors
+  state/      append-only event log
+  cli/        ranking / replay output
+tests/        unit + fixture + fake-room coverage
+config/       league, strategy, selector files
+fixtures/     frozen draft states for replay
+docs/         architecture, safety, CBS, and operator notes
+```
+
+## Documentation
+
+| Doc | Contents |
+| --- | --- |
+| [Architecture](docs/ARCHITECTURE.md) | Components, state machine, failure behavior |
+| [Draft engine](docs/DRAFT_ENGINE.md) | Scoring model, ADP value, scarcity, VOR rules |
+| [AI decision layer](docs/AI_DECISION_LAYER.md) | Prompt contract, schema, fallback |
+| [Safety](docs/SAFETY_RELIABILITY.md) | Gates, verification, prompt-injection resistance |
+| [CBS integration](docs/CBS_INTEGRATION.md) | Auth model, selector discovery, reader vs executor |
+| [Operator guide](docs/OPERATOR_README.md) | League-specific setup for live draft night |
+
+## Status
+
+This is working software for ranking, recommendation, CBS observation, and confirmed picks against a local fixture room. Live CBS submission stays behind explicit flags because a draft pick is a high-consequence, one-shot action. The system is designed so that path can be enabled without inventing a second, less-safe code path.
