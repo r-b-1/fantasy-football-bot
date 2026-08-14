@@ -37,7 +37,7 @@ See `config/league.current.json`. The project currently encodes the following in
 - Teams: 16
 - Scoring format: Head-to-Head Points, PPR
 - Keeper slots: 2
-- User team: `Front Runner` / fantasy name `Pickens My Jeanty`
+- User team on CBS: `Pickens My Jeanty` (formerly `Front Runner`; confirm exact spelling/casing in the live draft room)
 - Draft slot: 3rd
 - Current keepers: Ashton Jeanty and George Pickens
 - Completed trade: Kenneth Walker III + overall pick #62 for overall pick #21

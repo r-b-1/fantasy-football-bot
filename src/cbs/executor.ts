@@ -1,3 +1,4 @@
+import { isAllowedCbsUrl } from "./allowlist.js";
 import type { Page } from "playwright";
 import type { CandidateScore, DraftState, LeagueConfig, StrategyConfig } from "../domain/types.js";
 import type { SelectorConfig } from "./selectors.js";
@@ -11,6 +12,10 @@ export class CBSExecutor {
   ) {}
 
   async executePick(candidate: CandidateScore, state: DraftState): Promise<void> {
+    const pageUrl = this.page.url();
+    if (this.selectors.kind === "fixture" || !isAllowedCbsUrl(pageUrl) || pageUrl.includes("fixture-draft-room")) {
+      throw new Error("CBSExecutor will not act on the local fake room or any non-CBS page.");
+    }
     if (!this.league.cbsExecutionEnabled) {
       throw new Error("CBS execution is disabled in league config.");
     }

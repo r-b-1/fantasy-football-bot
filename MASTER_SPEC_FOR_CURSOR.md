@@ -369,7 +369,7 @@ MVP can be terminal output. Later, add a local web dashboard.
 Recommended live display:
 
 ```text
-PICK 21 — Front Runner is on the clock — 00:47
+PICK 21 — Pickens My Jeanty is on the clock — 00:47
 
 1. Player A  WR  Score 91.4  SL 76  ADP 33.1  +12.1 ADP value
 2. Player B  RB  Score 89.2  SL 60  ADP 34.3  +13.3 ADP value

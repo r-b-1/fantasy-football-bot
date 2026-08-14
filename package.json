@@ -10,7 +10,13 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "rank:demo": "tsx src/index.ts rank-demo",
-    "cbs:monitor": "tsx src/index.ts cbs-monitor"
+    "rank:fixture": "tsx src/index.ts rank-fixture",
+    "decide:fixture": "tsx src/index.ts decide-fixture",
+    "demo:replay": "tsx src/index.ts demo-replay",
+    "cbs:monitor": "tsx src/index.ts cbs-monitor",
+    "cbs:diagnose": "tsx src/index.ts cbs-diagnose",
+    "cbs:fixture": "tsx src/index.ts cbs-fixture",
+    "cbs:fixture-confirm": "tsx src/index.ts cbs-fixture-confirm"
   },
   "dependencies": {
     "dotenv": "^16.6.1",

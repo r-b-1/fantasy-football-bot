@@ -2,7 +2,7 @@
   "platform": "CBS",
   "season": 2026,
   "leagueName": "All in the Family FFBL",
-  "userTeamName": "Front Runner",
+  "userTeamName": "Pickens My Jeanty",
   "fantasyDisplayName": "Pickens My Jeanty",
   "teamCount": 16,
   "scoringFormat": "PPR",
@@ -39,6 +39,7 @@
   "notes": [
     "Lineup was inferred from roster screenshots and should be verified in CBS settings.",
     "Exact late-round pick inventory should be re-read from CBS before the live draft.",
-    "Official league-wide keepers are not yet populated; update after keeper lock."
+    "Official league-wide keepers are not yet populated; update after keeper lock.",
+    "CBS team name is Pickens My Jeanty (formerly Front Runner). Confirm exact spelling/casing from the live draft room before relying on turn detection."
   ]
 }

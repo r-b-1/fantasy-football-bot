@@ -1,0 +1,24 @@
+{
+  "kind": "fixture",
+  "status": "FIXTURE_ONLY_NOT_LIVE_CBS",
+  "instructions": "These locators belong to the local fake draft room in fixtures/cbs/fixture-draft-room.html. They are not CBS selectors and must never be used against allfam.football.cbssports.com.",
+  "draftRoomUrlPattern": "fixture-draft-room",
+  "selectors": {
+    "currentPick": "[data-testid='current-pick']",
+    "teamOnClock": "[data-testid='team-on-clock']",
+    "youAreUpIndicator": "[data-testid='you-are-up']",
+    "countdownClock": "[data-testid='countdown-clock']",
+    "playerRows": "[data-testid='player-row']",
+    "playerNameWithinRow": "[data-testid='player-name']",
+    "playerPositionWithinRow": "[data-testid='player-position']",
+    "playerNflTeamWithinRow": null,
+    "draftResultRows": "[data-testid='draft-result-row']",
+    "draftResultPickWithinRow": "[data-testid='result-pick']",
+    "draftResultTeamWithinRow": "[data-testid='result-team']",
+    "draftResultPlayerWithinRow": "[data-testid='result-player']",
+    "userRosterRows": "[data-testid='roster-player']",
+    "playerSearchInput": "[data-testid='player-search']",
+    "draftAction": "[data-testid='draft-action']",
+    "draftConfirmation": "[data-testid='draft-confirmation']"
+  }
+}

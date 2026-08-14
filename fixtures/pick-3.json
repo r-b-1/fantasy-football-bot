@@ -1,0 +1,15 @@
+{
+  "name": "pick-3",
+  "description": "Simulated 16-team PPR keeper draft at overall pick 3. Slot order and other-team keepers are fixture-only and are not official CBS data.",
+  "currentOverallPick": 3,
+  "teamOnClock": "Pickens My Jeanty",
+  "keepers": [
+    {"name": "Ashton Jeanty", "position": "RB", "fantasyTeam": "Pickens My Jeanty"},
+    {"name": "George Pickens", "position": "WR", "fantasyTeam": "Pickens My Jeanty"},
+    {"name": "Kenneth Walker III", "position": "RB", "fantasyTeam": "Now we're Cookin'"}
+  ],
+  "drafted": [
+    {"overallPick": 1, "fantasyTeam": "Hairy Butterscotch", "playerName": "Jahmyr Gibbs", "position": "RB"},
+    {"overallPick": 2, "fantasyTeam": "Gibbs me a win", "playerName": "Bijan Robinson", "position": "RB"}
+  ]
+}

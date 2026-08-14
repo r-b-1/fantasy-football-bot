@@ -1,0 +1,33 @@
+{
+  "name": "pick-21",
+  "description": "Simulated 16-team PPR keeper draft at overall pick 21 after the user took Puka Nacua at 3. Pick 21 is the traded selection. Other-team keepers and slot order are fixture-only, not official CBS data.",
+  "currentOverallPick": 21,
+  "teamOnClock": "Pickens My Jeanty",
+  "keepers": [
+    {"name": "Ashton Jeanty", "position": "RB", "fantasyTeam": "Pickens My Jeanty"},
+    {"name": "George Pickens", "position": "WR", "fantasyTeam": "Pickens My Jeanty"},
+    {"name": "Kenneth Walker III", "position": "RB", "fantasyTeam": "Now we're Cookin'"}
+  ],
+  "drafted": [
+    {"overallPick": 1, "fantasyTeam": "Hairy Butterscotch", "playerName": "Jahmyr Gibbs", "position": "RB"},
+    {"overallPick": 2, "fantasyTeam": "Gibbs me a win", "playerName": "Bijan Robinson", "position": "RB"},
+    {"overallPick": 3, "fantasyTeam": "Pickens My Jeanty", "playerName": "Puka Nacua", "position": "WR"},
+    {"overallPick": 4, "fantasyTeam": "Chase'n my Puka", "playerName": "Ja'Marr Chase", "position": "WR"},
+    {"overallPick": 5, "fantasyTeam": "Chubby Chasers", "playerName": "Jonathan Taylor", "position": "RB"},
+    {"overallPick": 6, "fantasyTeam": "Clyde", "playerName": "Derrick Henry", "position": "RB"},
+    {"overallPick": 7, "fantasyTeam": "Dezzie Does Dallas", "playerName": "Christian McCaffrey", "position": "RB"},
+    {"overallPick": 8, "fantasyTeam": "Doomsday Dingleberries", "playerName": "Jaxon Smith-Njigba", "position": "WR"},
+    {"overallPick": 9, "fantasyTeam": "F.A.F.O.", "playerName": "James Cook", "position": "RB"},
+    {"overallPick": 10, "fantasyTeam": "Gronk if you're horny", "playerName": "De'Von Achane", "position": "RB"},
+    {"overallPick": 11, "fantasyTeam": "Kickin Bass", "playerName": "Amon-Ra St. Brown", "position": "WR"},
+    {"overallPick": 12, "fantasyTeam": "Now we're Cookin'", "playerName": "Saquon Barkley", "position": "RB"},
+    {"overallPick": 13, "fantasyTeam": "Phil Belichick", "playerName": "Chase Brown", "position": "RB"},
+    {"overallPick": 14, "fantasyTeam": "Spider Monkeys", "playerName": "Josh Allen", "position": "QB"},
+    {"overallPick": 15, "fantasyTeam": "SUHK EM", "playerName": "Drake London", "position": "WR"},
+    {"overallPick": 16, "fantasyTeam": "Yo Mama", "playerName": "Josh Jacobs", "position": "RB"},
+    {"overallPick": 17, "fantasyTeam": "Yo Mama", "playerName": "Kyren Williams", "position": "RB"},
+    {"overallPick": 18, "fantasyTeam": "SUHK EM", "playerName": "Omarion Hampton", "position": "RB"},
+    {"overallPick": 19, "fantasyTeam": "Spider Monkeys", "playerName": "Rashee Rice", "position": "WR"},
+    {"overallPick": 20, "fantasyTeam": "Phil Belichick", "playerName": "CeeDee Lamb", "position": "WR"}
+  ]
+}

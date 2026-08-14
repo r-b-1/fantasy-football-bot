@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>LOCAL FAKE DRAFT ROOM — NOT CBS</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { margin: 0; font-family: Segoe UI, sans-serif; background: #10141c; color: #e8edf5; }
+    .banner { background: #9b1c1c; color: #fff; text-align: center; padding: 10px 16px; font-weight: 700; letter-spacing: .04em; }
+    .sub { background: #1c2433; color: #f2c14e; text-align: center; padding: 6px; font-size: 13px; }
+    .wrap { display: grid; grid-template-columns: 1.2fr .8fr; gap: 16px; padding: 16px; }
+    .card { background: #182132; border: 1px solid #2b3b55; border-radius: 10px; padding: 14px; }
+    h2 { margin: 0 0 10px; }
+    .status { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+    .pick { font-size: 28px; font-weight: 800; }
+    .clock { font-variant-numeric: tabular-nums; font-size: 28px; color: #7ee0a3; }
+    #you-are-up { display: none; background: #215c34; color: #d6ffd9; padding: 8px 12px; border-radius: 8px; font-weight: 700; }
+    #you-are-up.visible { display: inline-block; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 5px 6px; border-bottom: 1px solid #2b3b55; }
+    .ours { background: #243d2c; }
+    .disabled { opacity: .45; pointer-events: none; }
+    button, input { padding: 8px 12px; border: 0; border-radius: 6px; }
+    input { width: calc(100% - 24px); margin-bottom: 8px; background: #0f1622; color: #e8edf5; border: 1px solid #2b3b55; }
+    #pending { min-height: 1.4em; color: #f2c14e; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="banner" id="banner">LOCAL FAKE DRAFT ROOM — NOT CBS — LOOKS ONLY — NO LIVE DRAFT ACCESS</div>
+  <div class="sub">This page never contacts CBS. It replays a local fixture so the reader can be tested safely.</div>
+  <div class="wrap">
+    <section class="card">
+      <div class="status">
+        <div>
+          <div class="pick">Pick <span data-testid="current-pick">1</span></div>
+          <div>On the clock: <strong data-testid="team-on-clock">Hairy Butterscotch</strong></div>
+        </div>
+        <div>
+          <div class="clock" data-testid="countdown-clock">0:08</div>
+          <div id="you-are-up" data-testid="you-are-up">YOU ARE UP — Pickens My Jeanty</div>
+        </div>
+      </div>
+      <h2>Draft results</h2>
+      <table>
+        <thead><tr><th>#</th><th>Team</th><th>Player</th></tr></thead>
+        <tbody id="results"></tbody>
+      </table>
+    </section>
+    <section class="card">
+      <h2>Pickens My Jeanty roster</h2>
+      <ul id="roster"></ul>
+      <p>
+        <input data-testid="player-search" id="player-search" placeholder="Player to draft (fake room only)" disabled />
+        <button data-testid="draft-action" id="draft-action" type="button" class="disabled" disabled>Draft (fake room)</button>
+        <button data-testid="draft-confirmation" id="draft-confirmation" type="button" class="disabled" disabled>Confirm pick</button>
+      </p>
+      <div id="pending" data-testid="pending-player"></div>
+    </section>
+  </div>
+  <script>
+    const USER = "Pickens My Jeanty";
+    const params = new URLSearchParams(location.search);
+    const autoplay = params.get("autoplay") !== "0";
+    const pauseAt = Number(params.get("pauseAt") || "0");
+    const intervalMs = Number(params.get("intervalMs") || "700");
+    const confirmMode = params.get("confirmMode") === "1";
+    const everyPickIsUser = params.get("everyPickIsUser") === "1";
+
+    const currentPickEl = document.querySelector("[data-testid='current-pick']");
+    const teamEl = document.querySelector("[data-testid='team-on-clock']");
+    const clockEl = document.querySelector("[data-testid='countdown-clock']");
+    const youAreUp = document.getElementById("you-are-up");
+    const resultsBody = document.getElementById("results");
+    const rosterEl = document.getElementById("roster");
+    const searchInput = document.getElementById("player-search");
+    const draftBtn = document.getElementById("draft-action");
+    const confirmBtn = document.getElementById("draft-confirmation");
+    const pendingEl = document.getElementById("pending");
+    const banner = document.getElementById("banner");
+
+    if (confirmMode) {
+      banner.textContent = "LOCAL FAKE DRAFT ROOM — CONFIRM MODE — STILL NOT CBS — NO LIVE DRAFT ACCESS";
+    }
+
+    function fmt(seconds) {
+      const m = Math.floor(seconds / 60);
+      const s = String(seconds % 60).padStart(2, "0");
+      return m + ":" + s;
+    }
+
+    function renderRoster(keepers, results) {
+      const ours = [
+        ...keepers.filter((k) => k.fantasyTeam === USER).map((k) => k.name + " (" + k.position + ", keeper)"),
+        ...results.filter((p) => p.fantasyTeam === USER).map((p) => p.playerName + " (" + (p.position || "?") + ", draft)")
+      ];
+      rosterEl.innerHTML = ours.map((line) => '<li data-testid="roster-player">' + line + "</li>").join("");
+    }
+
+    function renderResults(results) {
+      resultsBody.innerHTML = results.map((p) => {
+        const ours = p.fantasyTeam === USER ? " ours" : "";
+        return '<tr data-testid="draft-result-row" class="' + ours.trim() + '">' +
+          '<td data-testid="result-pick">' + p.overallPick + "</td>" +
+          '<td data-testid="result-team">' + p.fantasyTeam + "</td>" +
+          '<td data-testid="result-player">' + p.playerName + "</td></tr>";
+      }).join("");
+    }
+
+    function showPick(script, overallPick, seconds, results) {
+      const upcoming = script.drafted.find((p) => p.overallPick === overallPick);
+      const team = everyPickIsUser ? USER : (upcoming ? upcoming.fantasyTeam : "complete");
+      currentPickEl.textContent = String(overallPick);
+      teamEl.textContent = team;
+      clockEl.textContent = fmt(seconds);
+      youAreUp.classList.toggle("visible", team === USER);
+      renderResults(results);
+      renderRoster(script.keepers, results);
+    }
+
+    async function runLookOnly(script) {
+      const last = Math.max(...script.drafted.map((p) => p.overallPick), 35);
+      let overallPick = 1;
+      const results = [];
+      showPick(script, overallPick, 8, results);
+      if (!autoplay) return;
+      while (overallPick <= last) {
+        if (pauseAt && overallPick === pauseAt) return;
+        const onClock = script.drafted.find((p) => p.overallPick === overallPick);
+        const seconds = onClock?.fantasyTeam === USER ? 10 : 4;
+        for (let left = seconds; left >= 0; left -= 1) {
+          clockEl.textContent = fmt(left);
+          await new Promise((r) => setTimeout(r, Math.max(60, intervalMs / Math.max(seconds, 1))));
+        }
+        if (onClock) results.push(onClock);
+        overallPick += 1;
+        if (overallPick > last) break;
+        showPick(script, overallPick, 8, results);
+        await new Promise((r) => setTimeout(r, intervalMs));
+      }
+    }
+
+    async function runConfirm(script) {
+      window.__overallPick = 1;
+      window.__results = [];
+      window.__pendingPlayer = "";
+      window.__waitingForUser = false;
+      const last = everyPickIsUser ? 10 : Math.max(...script.drafted.map((p) => p.overallPick), 35);
+
+      function teamFor(pick) {
+        if (everyPickIsUser) return USER;
+        return script.drafted.find((p) => p.overallPick === pick)?.fantasyTeam ?? "complete";
+      }
+
+      function refresh(seconds) {
+        const ours = teamFor(window.__overallPick) === USER;
+        showPick(script, window.__overallPick, seconds ?? (ours ? 30 : 8), window.__results);
+        searchInput.disabled = !ours;
+        draftBtn.disabled = !ours || Boolean(window.__pendingPlayer);
+        confirmBtn.disabled = !ours || !window.__pendingPlayer;
+        draftBtn.classList.toggle("disabled", draftBtn.disabled);
+        confirmBtn.classList.toggle("disabled", confirmBtn.disabled);
+        pendingEl.textContent = window.__pendingPlayer ? ("Pending: " + window.__pendingPlayer) : "";
+      }
+
+      window.__fixtureDraft = function (playerName) {
+        if (teamFor(window.__overallPick) !== USER) return { ok: false, reason: "not user turn" };
+        if (!playerName || !String(playerName).trim()) return { ok: false, reason: "missing player" };
+        const name = String(playerName).trim();
+        if (window.__results.some((row) => row.playerName.toLowerCase() === name.toLowerCase())) {
+          return { ok: false, reason: "already drafted" };
+        }
+        window.__pendingPlayer = name;
+        refresh();
+        return { ok: true, pending: name };
+      };
+
+      window.__fixtureConfirm = function () {
+        if (!window.__pendingPlayer) return { ok: false, reason: "nothing pending" };
+        if (teamFor(window.__overallPick) !== USER) return { ok: false, reason: "not user turn" };
+        window.__results.push({
+          overallPick: window.__overallPick,
+          fantasyTeam: USER,
+          playerName: window.__pendingPlayer
+        });
+        window.__pendingPlayer = "";
+        window.__overallPick += 1;
+        window.__waitingForUser = false;
+        refresh();
+        return { ok: true };
+      };
+
+      draftBtn.addEventListener("click", () => window.__fixtureDraft(searchInput.value));
+      confirmBtn.addEventListener("click", () => window.__fixtureConfirm());
+
+      refresh();
+      while (window.__overallPick <= last) {
+        const team = teamFor(window.__overallPick);
+        if (team === USER) {
+          window.__waitingForUser = true;
+          refresh(30);
+          while (window.__waitingForUser) {
+            await new Promise((r) => setTimeout(r, 50));
+          }
+          continue;
+        }
+        const scripted = script.drafted.find((p) => p.overallPick === window.__overallPick);
+        if (!scripted) break;
+        const seconds = 4;
+        for (let left = seconds; left >= 0; left -= 1) {
+          clockEl.textContent = fmt(left);
+          await new Promise((r) => setTimeout(r, Math.max(60, intervalMs / seconds)));
+        }
+        window.__results.push(scripted);
+        window.__overallPick += 1;
+        refresh(8);
+      }
+    }
+
+    fetch("/pick-35.json")
+      .then((r) => r.json())
+      .then((script) => (confirmMode ? runConfirm(script) : runLookOnly(script)))
+      .catch((err) => {
+        document.querySelector(".sub").textContent = "Failed to load local fixture JSON: " + err;
+      });
+  </script>
+</body>
+</html>

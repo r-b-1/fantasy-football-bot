@@ -1,0 +1,24 @@
+{
+  "kind": "live",
+  "status": "CONFIGURED_FROM_LIVE_ROOM2_PREDRAFT",
+  "instructions": "Locators captured from the logged-in All in the Family draft room at /draft/live/room2 on 2026-08-13. CBS uses dotted YUI ids (id=\"DraftRoom.views.timer\"), so attribute selectors are required. Do not use yui-gen* ids. Column nth-child values come from the live table headers PLAYER/POS/TEAM and PICK/TEAM/PLAYER. Draft/search/confirm locators are still null because those controls were not visible before the draft started. Never click TURN ON AUTOPILOT.",
+  "draftRoomUrlPattern": "allfam.football.cbssports.com/draft/live/room2",
+  "selectors": {
+    "currentPick": "[id=\"DraftRoom.views.status\"]",
+    "teamOnClock": "table.on_the_clock",
+    "youAreUpIndicator": "[id=\"DraftRoom.views.teamlist\"]",
+    "countdownClock": "[id=\"DraftRoom.views.timer\"]",
+    "playerRows": "table#playerListDD tr[id^=\"playerListDD_\"]",
+    "playerNameWithinRow": "td:nth-child(1)",
+    "playerPositionWithinRow": "td:nth-child(2)",
+    "playerNflTeamWithinRow": "td:nth-child(3)",
+    "draftResultRows": "[id=\"DraftRoom.views.results\"] table.data tr",
+    "draftResultPickWithinRow": "td:nth-child(1)",
+    "draftResultTeamWithinRow": "td:nth-child(2)",
+    "draftResultPlayerWithinRow": "td:nth-child(3)",
+    "userRosterRows": null,
+    "playerSearchInput": null,
+    "draftAction": null,
+    "draftConfirmation": null
+  }
+}

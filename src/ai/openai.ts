@@ -1,100 +1,121 @@
 import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
-import { z } from "zod";
-import type { CandidateScore, DraftDecision, DraftState, LeagueConfig } from "../domain/types.js";
+import { DraftDecisionModelSchema } from "../config/schema.js";
+import type { CandidateScore, DraftDecision, DraftState, LeagueConfig, StrategyConfig } from "../domain/types.js";
 import { deterministicDecision } from "../engine/decision.js";
-
-const DraftDecisionSchema = z.object({
-  selectedCandidateId: z.string(),
-  confidence: z.number().min(0).max(1),
-  rationale: z.string().max(600),
-  alternativeCandidateIds: z.array(z.string()).max(4),
-  riskFlags: z.array(
-    z.enum([
-      "NONE",
-      "POSITION_RUN",
-      "TIER_CLIFF",
-      "ROSTER_IMBALANCE",
-      "BYE_OVERLAP",
-      "LOW_CONFIDENCE",
-      "STALE_DATA"
-    ])
-  )
-});
+import { buildDecisionPayload, buildSystemPrompt } from "./prompt.js";
+import { validateModelDecision } from "./validate.js";
 
 export interface AIOptions {
   model: string;
   reasoningEffort: "none" | "minimal" | "low" | "medium" | "high";
   timeoutMs: number;
   confidenceThreshold: number;
+  apiKey?: string | null;
+  decisionModel?: DecisionModel;
+}
+
+export interface DecisionModelRequest {
+  model: string;
+  reasoningEffort: AIOptions["reasoningEffort"];
+  systemPrompt: string;
+  userPayload: Record<string, unknown>;
+  timeoutMs: number;
+  abortSignal: AbortSignal;
+}
+
+export interface DecisionModel {
+  parse(request: DecisionModelRequest): Promise<unknown>;
+}
+
+export function createOpenAIDecisionModel(apiKey: string): DecisionModel {
+  const client = new OpenAI({ apiKey });
+  return {
+    async parse(request) {
+      const response = await client.responses.parse(
+        {
+          model: request.model,
+          reasoning: { effort: request.reasoningEffort },
+          input: [
+            { role: "system", content: request.systemPrompt },
+            { role: "user", content: JSON.stringify(request.userPayload) }
+          ],
+          text: {
+            format: zodTextFormat(DraftDecisionModelSchema, "draft_decision")
+          }
+        },
+        { timeout: request.timeoutMs, signal: request.abortSignal }
+      );
+      return response.output_parsed;
+    }
+  };
 }
 
 export async function chooseWithAI(
   candidates: CandidateScore[],
   state: DraftState,
   league: LeagueConfig,
+  strategy: StrategyConfig,
   options: AIOptions
 ): Promise<DraftDecision> {
   const fallback = deterministicDecision(candidates);
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return fallback;
+  const started = Date.now();
+  const withLatency = (decision: DraftDecision, reason?: string): DraftDecision => ({
+    ...decision,
+    latencyMs: Date.now() - started,
+    fallbackReason: reason
+  });
 
-  const shortlist = candidates.map((c) => ({
-    id: c.player.id,
-    name: c.player.name,
-    position: c.player.position,
-    nflTeam: c.player.nflTeam ?? null,
-    sportslineRating: c.player.sportslineRating,
-    adp: c.player.adp,
-    projectedPoints: c.player.projectedPoints ?? null,
-    deterministicScore: c.score,
-    componentScores: c.components
-  }));
-  const allowedIds = new Set(shortlist.map((c) => c.id));
+  const apiKey = options.apiKey ?? process.env.OPENAI_API_KEY ?? null;
+  const model = options.decisionModel ?? (apiKey ? createOpenAIDecisionModel(apiKey) : null);
+  if (!model) {
+    return withLatency(fallback, "OPENAI_API_KEY missing");
+  }
 
-  const systemPrompt = [
-    "You are a fantasy-football draft decision layer for one 16-team CBS keeper league.",
-    "You may ONLY select a candidate ID from the supplied shortlist.",
-    "The league is full PPR and starts 3 WR, so RB/WR depth is valuable.",
-    "Account for 16-team QB scarcity, but do not reach past materially better RB/WR value.",
-    "Use TE tier cliffs when relevant. K and DST should generally be late.",
-    "SportsLine rating is an important model input; ADP is market information, not a direct live-draft pick because keepers distort the pool.",
-    "Prefer the best total roster/value outcome, not simply filling an empty position.",
-    "Return a concise rationale."
-  ].join(" ");
-
-  const payload = {
-    currentOverallPick: state.currentOverallPick,
-    nextUserOverallPick: state.nextUserOverallPick,
-    roster: state.roster.players,
-    recentPositionCounts: state.recentPositionCounts,
-    lineup: league.lineup,
-    teamCount: league.teamCount,
-    candidates: shortlist
-  };
+  const payload = buildDecisionPayload(candidates, state, league, strategy);
+  const allowedIds = candidates.map((candidate) => candidate.player.id);
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
 
   try {
-    const client = new OpenAI({ apiKey, timeout: options.timeoutMs });
-    const response = await client.responses.parse({
-      model: options.model,
-      reasoning: { effort: options.reasoningEffort },
-      input: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: JSON.stringify(payload) }
-      ],
-      text: {
-        format: zodTextFormat(DraftDecisionSchema, "draft_decision")
-      }
-    });
+    const parsed = await Promise.race([
+      model.parse({
+        model: options.model,
+        reasoningEffort: options.reasoningEffort,
+        systemPrompt: buildSystemPrompt(league, strategy),
+        userPayload: payload,
+        timeoutMs: options.timeoutMs,
+        abortSignal: controller.signal
+      }),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          controller.abort();
+          reject(new Error(`AI timeout after ${options.timeoutMs}ms`));
+        }, options.timeoutMs);
+      })
+    ]);
 
-    const parsed = response.output_parsed;
-    if (!parsed) return fallback;
-    if (!allowedIds.has(parsed.selectedCandidateId)) return fallback;
-    if (parsed.alternativeCandidateIds.some((id) => !allowedIds.has(id))) return fallback;
-    if (parsed.confidence < options.confidenceThreshold) return fallback;
-
-    return { ...parsed, source: "ai" };
-  } catch {
-    return fallback;
+    const validated = validateModelDecision(parsed, allowedIds, options.confidenceThreshold);
+    if (!validated.ok) return withLatency(fallback, validated.reason);
+    return {
+      ...validated.decision,
+      source: "ai",
+      latencyMs: Date.now() - started
+    };
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "AI request failed";
+    return withLatency(fallback, reason);
+  } finally {
+    if (timer) clearTimeout(timer);
   }
+}
+
+export function defaultAIOptions(strategy: StrategyConfig): AIOptions {
+  return {
+    model: process.env.OPENAI_MODEL ?? "gpt-5.6",
+    reasoningEffort:
+      (process.env.OPENAI_REASONING_EFFORT as AIOptions["reasoningEffort"] | undefined) ?? "low",
+    timeoutMs: strategy.aiTimeoutMs,
+    confidenceThreshold: strategy.aiConfidenceThreshold
+  };
 }

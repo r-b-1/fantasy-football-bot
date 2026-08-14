@@ -16,6 +16,10 @@
     "K": 35,
     "DST": 35
   },
+  "kDstEligibleAfterOverallPick": 130,
+  "byeOverlapPenalty": 6,
+  "vorWeight": 0,
+  "recentPickWindow": 8,
   "softDraftPlan": {
     "3": "premium_RB_WR",
     "21": "RB_WR_balance",

@@ -1,4 +1,5 @@
 {
+  "kind": "live",
   "status": "UNCONFIGURED_DO_NOT_USE_FOR_LIVE_EXECUTION",
   "instructions": "Populate only after inspecting the real logged-in CBS draft room with Playwright MCP or codegen. Prefer role/text/test-id locators. Never guess from screenshots.",
   "draftRoomUrlPattern": "allfam.football.cbssports.com",
