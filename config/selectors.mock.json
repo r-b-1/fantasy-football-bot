@@ -1,0 +1,24 @@
+{
+  "kind": "live",
+  "status": "MOCK_READ_WIDGETS_FROM_ROOM2_CLICKS_UNSET",
+  "instructions": "Read locators are the captured DraftRoom.views.* widgets from the CBS draft-room UI (same dotted YUI ids as /draft/live/room2). Click locators stay null until captured from a public mock while YOU ARE UP. Save those to config/selectors.local.json. Do not guess. Do not use yui-gen* ids. Never click TURN ON AUTOPILOT or Join. Lobby copy captured 2026-09-07 from mockdraft.football.cbssports.com: 'PPR - Standard Roster', 'PPR - Flex Roster', 'Standard Roster', 'Flex Roster', and member counts like '4 of 10'.",
+  "draftRoomUrlPattern": "mockdraft.football.cbssports.com",
+  "selectors": {
+    "currentPick": "[id=\"DraftRoom.views.status\"]",
+    "teamOnClock": "table.on_the_clock",
+    "youAreUpIndicator": "[id=\"DraftRoom.views.teamlist\"]",
+    "countdownClock": "[id=\"DraftRoom.views.timer\"]",
+    "playerRows": "table#playerListDD tr[id^=\"playerListDD_\"]",
+    "playerNameWithinRow": "td:nth-child(1)",
+    "playerPositionWithinRow": "td:nth-child(2)",
+    "playerNflTeamWithinRow": "td:nth-child(3)",
+    "draftResultRows": "[id=\"DraftRoom.views.results\"] table.data tr",
+    "draftResultPickWithinRow": "td:nth-child(1)",
+    "draftResultTeamWithinRow": "td:nth-child(2)",
+    "draftResultPlayerWithinRow": "td:nth-child(3)",
+    "userRosterRows": null,
+    "playerSearchInput": null,
+    "draftAction": null,
+    "draftConfirmation": null
+  }
+}

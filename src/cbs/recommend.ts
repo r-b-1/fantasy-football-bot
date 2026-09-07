@@ -12,7 +12,6 @@ import { formatProjection } from "../cli/format.js";
 import { draftStateForOnClockTeam } from "../engine/onClockPreview.js";
 import { appendEvent } from "../state/eventLog.js";
 import {
-  DEFAULT_CBS_MOCK_DRAFT_URL,
   isAllInTheFamilyHost,
   isAllowedCbsUrl,
   leagueStartUrl,
@@ -31,7 +30,8 @@ import {
   resolveSelectorConfigPath,
   type SelectorConfig
 } from "./selectors.js";
-import { openLoggedInDraftRoom } from "./session.js";
+import { resolveMockDraftStartUrl } from "./mockStartUrl.js";
+import { openLoggedInDraftRoom, resolveCbsBrowserProfileDir } from "./session.js";
 
 export interface LiveRecommendOptions {
   useAI?: boolean;
@@ -41,6 +41,7 @@ export interface LiveRecommendOptions {
   prompt?: string;
   preferredPattern?: string;
   showProjection?: boolean;
+  profileDir?: string;
 }
 
 function mockJoinPrompt(): string {
@@ -86,7 +87,7 @@ async function waitUntilSelectorsResolve(page: Page, selectors: SelectorConfig):
   }
   if (last.length > 0) {
     throw new Error(
-      `Required CBS read locators missed the page (${last.join(", ")}). Run \`npm run cbs:diagnose\` or \`npm run cbs:diagnose -- --mock\` in this room. Do not guess selectors.`
+      `Required CBS read locators missed the page (${last.join(", ")}). Run \`npm run cbs:diagnose\` or \`npm run cbs:diagnose-mock\` in this room. Do not guess selectors.`
     );
   }
 }
@@ -140,7 +141,7 @@ export async function runCbsRecommend(options: LiveRecommendOptions = {}): Promi
     return;
   }
 
-  const profileDir = process.env.CBS_BROWSER_PROFILE_DIR ?? ".local/cbs-browser-profile";
+  const profileDir = options.profileDir ?? resolveCbsBrowserProfileDir("live");
   const eventLogPath = process.env.EVENT_LOG;
   const refuseLeagueRoom = options.refuseLeagueRoom ?? false;
   const { session, focused } = await openLoggedInDraftRoom({
@@ -198,10 +199,11 @@ export async function runCbsRecommend(options: LiveRecommendOptions = {}): Promi
 export async function runCbsMockDraft(options: { useAI?: boolean } = {}): Promise<void> {
   await runCbsRecommend({
     useAI: options.useAI ?? true,
-    startUrl: process.env.CBS_MOCK_DRAFT_URL ?? DEFAULT_CBS_MOCK_DRAFT_URL,
+    startUrl: resolveMockDraftStartUrl(),
     leaguePath: process.env.CBS_MOCK_LEAGUE_CONFIG ?? "config/league.mock.json",
     refuseLeagueRoom: true,
-    prompt: mockJoinPrompt()
+    prompt: mockJoinPrompt(),
+    profileDir: resolveCbsBrowserProfileDir("mock")
   });
 }
 

@@ -6,6 +6,7 @@ import { runFixtureConfirm } from "./cbs/fixtureConfirm.js";
 import { runFixtureMonitor } from "./cbs/fixtureMonitor.js";
 import { runFixtureProjection } from "./cbs/fixtureProjection.js";
 import { runCbsMonitor } from "./cbs/monitor.js";
+import { runCbsMockConfirm } from "./cbs/mockConfirm.js";
 import { runCbsMockDraft, runCbsRecommend } from "./cbs/recommend.js";
 import { loadLeagueConfig, loadStrategyConfig } from "./config/load.js";
 import { loadSportslineWorkbook } from "./data/sportsline.js";
@@ -182,8 +183,8 @@ async function main(): Promise<void> {
     });
     return;
   }
-  if (command === "cbs-diagnose") {
-    await runCbsDiagnose({ mock: process.argv.includes("--mock") });
+  if (command === "cbs-diagnose" || command === "cbs-diagnose-mock") {
+    await runCbsDiagnose({ mock: command === "cbs-diagnose-mock" || process.argv.includes("--mock") });
     return;
   }
   if (command === "cbs-monitor") {
@@ -196,6 +197,10 @@ async function main(): Promise<void> {
   }
   if (command === "cbs-mock") {
     await runCbsMockDraft({ useAI: !process.argv.includes("--no-ai") });
+    return;
+  }
+  if (command === "cbs-mock-confirm") {
+    await runCbsMockConfirm({ useAI: !process.argv.includes("--no-ai") });
     return;
   }
   if (command === "companion") {

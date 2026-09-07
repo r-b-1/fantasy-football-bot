@@ -55,6 +55,18 @@ describe("live turn identity lock", () => {
     expect(next.knownOverallPicks.slice(0, 4)).toEqual([3, 22, 27, 46]);
     expect(next.knownOverallPicks).toHaveLength(estimatedDraftRounds(next));
   });
+
+  it("locks 12-team slot 2 from overall pick 2, not from the round number", () => {
+    const league = loadLeagueConfig("config/league.mock.confirm.json");
+    const next = applyLiveTurnIdentity(league, {
+      youAreUp: true,
+      teamOnClock: "pickens fan",
+      currentOverallPick: 2
+    });
+    expect(next.userTeamName).toBe("pickens fan");
+    expect(next.draftSlot).toBe(2);
+    expect(next.knownOverallPicks.slice(0, 4)).toEqual([2, 23, 26, 47]);
+  });
 });
 
 describe("recommend turn", () => {

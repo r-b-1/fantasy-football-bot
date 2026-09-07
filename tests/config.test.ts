@@ -25,6 +25,19 @@ describe("config validation", () => {
     expect(strategy.candidateShortlistSize).toBe(7);
   });
 
+  it("loads the public mock confirm league without keepers and with clicking gated to mocks", () => {
+    const mock = loadLeagueConfig("config/league.mock.confirm.json");
+    expect(mock.teamCount).toBe(12);
+    expect(mock.keepers).toEqual([]);
+    expect(mock.keeperSlots).toBe(0);
+    expect(mock.cbsExecutionEnabled).toBe(true);
+    expect(mock.executionMode).toBe("confirm");
+    expect(mock.inferUserTeamFromYouAreUp).toBe(true);
+    const live = loadLeagueConfig("config/league.current.json");
+    expect(live.executionMode).toBe("recommend");
+    expect(live.cbsExecutionEnabled).toBe(false);
+  });
+
   it("loads the public mock-draft league without keepers or live clicking", () => {
     const mock = loadLeagueConfig("config/league.mock.json");
     expect(mock.teamCount).toBe(12);

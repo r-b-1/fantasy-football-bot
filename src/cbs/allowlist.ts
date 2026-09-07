@@ -83,6 +83,16 @@ export function isAllInTheFamilyHost(url: string): boolean {
   }
 }
 
+/** Public CBS mock draft room (not the lobby, not All in the Family). */
+export function isCbsMockDraftRoom(url: string): boolean {
+  if (!looksLikeCbsDraftRoom(url) || isAllInTheFamilyHost(url)) return false;
+  try {
+    return hostnameOf(url).includes("mockdraft");
+  } catch {
+    return false;
+  }
+}
+
 /** League home, draft-central research, and news feeds are not the live draft room. */
 export function looksLikeCbsDraftRoom(url: string): boolean {
   if (!isAllowedCbsUrl(url)) return false;
@@ -91,7 +101,7 @@ export function looksLikeCbsDraftRoom(url: string): boolean {
     const host = parsed.hostname.toLowerCase();
     const path = parsed.pathname.toLowerCase();
     if (looksLikeCbsMockDraftLobby(url)) return false;
-    if (/^mockdraft-\d+\./.test(host)) return true;
+    if (/^mockdraft\d*-\d+\./.test(host)) return true;
     if (host.includes("mockdraft") && path.includes("/mockdraft/")) return true;
     if (path.includes("draft-central")) return false;
     if (path.includes("draft-research")) return false;
@@ -109,7 +119,7 @@ export function pickDraftRoomUrl(urls: string[], preferredPattern?: string): str
   }
   const mockRoom = urls.find((url) => {
     try {
-      return looksLikeCbsDraftRoom(url) && /^mockdraft-\d+\./.test(hostnameOf(url));
+      return looksLikeCbsDraftRoom(url) && hostnameOf(url).includes("mockdraft");
     } catch {
       return false;
     }

@@ -5,7 +5,14 @@ import { nextUserOverallPick, recentPositionCounts } from "../engine/state.js";
 import { assertAllowedCbsUrl, assertAllowedFixtureUrl, hostnameOf, looksLikeCbsDraftRoom } from "./allowlist.js";
 import { selectorsUnconfigured } from "./errors.js";
 import { isVisible, locatorFromConfig, readAllInnerTexts, readVisibleText } from "./locators.js";
-import { interpretYouAreUp, parseClockSecondsLenient, parseOverallPickLenient } from "./parse.js";
+import {
+  interpretYouAreUp,
+  listedPositionFromCbsName,
+  parseClockSecondsLenient,
+  parseOverallPickLenient,
+  parseTeamOnClock,
+  sportslineNameFromCbsListing
+} from "./parse.js";
 import {
   extractPickIntervalRaw,
   isWaitingToStart,
@@ -75,7 +82,7 @@ export class CBSReader {
       this.selectors.selectors.teamOnClock,
       "teamOnClock"
     );
-    const teamOnClock = teamOnClockRaw.trim() || null;
+    const teamOnClock = parseTeamOnClock(teamOnClockRaw);
     const youAreUpVisible = this.selectors.selectors.youAreUpIndicator
       ? await isVisible(this.page, this.selectors.selectors.youAreUpIndicator, "youAreUpIndicator")
       : false;
@@ -87,7 +94,10 @@ export class CBSReader {
             "youAreUpIndicator"
           )
         : "";
-    const youAreUp = interpretYouAreUp(youAreUpRaw);
+    const pageHaystack = ((await this.page
+      .evaluate(`(() => (document.body ? document.body.innerText || "" : "").replace(/\\s+/g, " "))()`)
+      .catch(() => "")) as string).slice(0, 4000);
+    const youAreUp = interpretYouAreUp(`${youAreUpRaw} ${teamOnClockRaw} ${pageHaystack}`);
     let clockRaw: string | null = null;
     let clockSecondsRemaining: number | null = null;
     if (this.selectors.selectors.countdownClock) {
@@ -248,9 +258,16 @@ export class CBSReader {
       const fantasyTeam = (await row.locator(teamWithin).innerText({ timeout: 500 }).catch(() => "")).trim();
       const playerName = (await row.locator(playerWithin).innerText({ timeout: 500 }).catch(() => "")).trim();
       const overallPick = parseOverallPickLenient(pickText);
-      if (overallPick == null || !fantasyTeam || !playerName) continue;
-      if (/^pick$/i.test(pickText) || /^team$/i.test(fantasyTeam) || /^player$/i.test(playerName)) continue;
-      results.push({ overallPick, fantasyTeam, playerName });
+      const canonicalName = sportslineNameFromCbsListing(playerName);
+      if (overallPick == null || !fantasyTeam || !canonicalName) continue;
+      if (/^pick$/i.test(pickText) || /^round\s+\d+$/i.test(pickText)) continue;
+      if (/^team$/i.test(fantasyTeam) || /^player$/i.test(canonicalName)) continue;
+      results.push({
+        overallPick,
+        fantasyTeam,
+        playerName: canonicalName,
+        position: listedPositionFromCbsName(playerName)
+      });
     }
     return results;
   }

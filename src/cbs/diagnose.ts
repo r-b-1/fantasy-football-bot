@@ -3,23 +3,58 @@ import {
   allSelectorFields,
   loadSelectorConfig,
   REQUIRED_READ_SELECTOR_FIELDS,
+  requiredClickSelectors,
   requiredReadSelectors,
+  resolveMockSelectorConfigPath,
   resolveSelectorConfigPath
 } from "./selectors.js";
 import { probeSelector } from "./locators.js";
-import { openLoggedInDraftRoom, summarizeAccessibility } from "./session.js";
 import {
-  DEFAULT_CBS_MOCK_DRAFT_URL,
+  closeSession,
+  openAllowlistedUrl,
+  openCBSSession,
+  openLoggedInDraftRoom,
+  resolveCbsBrowserProfileDir,
+  summarizeAccessibility,
+  waitForPublicMockDraftRoom,
+  waitUntilMockPlayerPopupOpen,
+  waitUntilMockYouAreUp
+} from "./session.js";
+import { persistMockDraftStartUrl, resolveMockDraftStartUrl } from "./mockStartUrl.js";
+import {
   isAllInTheFamilyHost,
   isAllowedCbsUrl,
   leagueStartUrl,
   looksLikeCbsDraftRoom
 } from "./allowlist.js";
 import { inspectDraftRoom, writeDiagnoseDump } from "./inspect.js";
+import { parseListedTeamCount, parseScoringFormat } from "./roomFacts.js";
+import { writeFileSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
+
+async function openMockDiagnoseRoom(
+  profileDir: string,
+  startUrl: string
+): Promise<Awaited<ReturnType<typeof openLoggedInDraftRoom>>> {
+  const session = await openCBSSession(profileDir);
+  try {
+    await openAllowlistedUrl(session.page, startUrl);
+    console.log(`Opened ${session.page.url()}`);
+    console.log("Join a public mock yourself in this Chrome window. This program will not click Join.");
+    console.log("Waiting until that room is open and YOU ARE ON THE CLOCK. Leave this terminal running.");
+    const focused = await waitForPublicMockDraftRoom(session);
+    return { session, focused };
+  } catch (error) {
+    await closeSession(session);
+    throw error;
+  }
+}
 
 export async function runCbsDiagnose(options: { mock?: boolean } = {}): Promise<void> {
-  const selectorPath = resolveSelectorConfigPath();
   const mock = options.mock ?? false;
+  const selectorPath = mock
+    ? resolveMockSelectorConfigPath()
+    : resolveSelectorConfigPath();
   const league = loadLeagueConfig(
     mock
       ? (process.env.CBS_MOCK_LEAGUE_CONFIG ?? "config/league.mock.json")
@@ -31,27 +66,36 @@ export async function runCbsDiagnose(options: { mock?: boolean } = {}): Promise<
     process.exitCode = 2;
     return;
   }
-  const profileDir = process.env.CBS_BROWSER_PROFILE_DIR ?? ".local/cbs-browser-profile";
-  const startUrl = mock
-    ? (process.env.CBS_MOCK_DRAFT_URL ?? DEFAULT_CBS_MOCK_DRAFT_URL)
-    : leagueStartUrl(selectors.draftRoomUrlPattern);
+  const profileDir = resolveCbsBrowserProfileDir(mock ? "mock" : "live");
+  const startUrl = mock ? resolveMockDraftStartUrl() : leagueStartUrl(selectors.draftRoomUrlPattern);
 
   console.log(`League: ${league.leagueName} / ${league.userTeamName}`);
   console.log(`Selector config: ${selectorPath} (${selectors.status})`);
   console.log(mock ? "Mode: public CBS mock diagnose (no clicks)." : "Mode: league draft-room diagnose (no clicks).");
   console.log("Opening a visible Chrome window with a local persistent profile.");
+  console.log(`Chrome profile: ${profileDir}`);
+  if (mock) console.log(`Mock start URL: ${startUrl}`);
   console.log("Log into CBS yourself. This program will not ask for or store credentials.");
 
-  const { session, focused } = await openLoggedInDraftRoom({
-    profileDir,
-    startUrl,
-    preferredPattern: mock ? undefined : selectors.draftRoomUrlPattern,
-    prompt: mock
-      ? "Join a 12-team PPR Standard mock yourself (Join Now). This program will not click Join. When the draft room is open, press Enter.\nDo not use the All in the Family room.\n"
-      : "Click Draft Room even if it opens a new window. Wait until pick/clock are visible, then press Enter here.\nDo not press Enter on League Feed.\n"
-  });
+  let { session, focused } = mock
+    ? await openMockDiagnoseRoom(profileDir, startUrl)
+    : await openLoggedInDraftRoom({
+        profileDir,
+        startUrl,
+        preferredPattern: selectors.draftRoomUrlPattern,
+        prompt:
+          "Click Draft Room even if it opens a new window. Wait until pick/clock are visible, then press Enter here.\nDo not press Enter on League Feed.\n"
+      });
 
   try {
+    if (mock) {
+      const remembered = persistMockDraftStartUrl(focused.page.url());
+      console.log(`Remembered ${remembered} for the next mock command.`);
+      focused = await waitUntilMockYouAreUp(session, selectors);
+      persistMockDraftStartUrl(focused.page.url());
+      focused = await waitUntilMockPlayerPopupOpen(session);
+      persistMockDraftStartUrl(focused.page.url());
+    }
     console.log(`Open windows (${focused.urls.length}):`);
     for (const openUrl of focused.urls) {
       console.log(`  ${openUrl}`);
@@ -101,6 +145,34 @@ export async function runCbsDiagnose(options: { mock?: boolean } = {}): Promise<
         unresolvedRequired.push(field);
       }
     }
+    const haystack = ((await focused.page.evaluate(
+      `(() => (document.body ? document.body.innerText || "" : "").replace(/\\s+/g, " "))()`
+    )) as string).slice(0, 8000);
+    const scoring = parseScoringFormat(haystack);
+    const listedTeamCount = parseListedTeamCount(haystack);
+    const clickMissing = requiredClickSelectors(selectors);
+    console.log(
+      `\nVisible room facts: scoring=${scoring ? `${scoring.format} (${scoring.raw})` : "unresolved"} teamCount=${listedTeamCount ?? "unresolved"}`
+    );
+    if (mock) {
+      mkdirSync(".local", { recursive: true });
+      writeFileSync(
+        join(".local", "mock-room-facts.json"),
+        `${JSON.stringify(
+          {
+            capturedAt: new Date().toISOString(),
+            url,
+            scoring,
+            listedTeamCount,
+            clickMissing,
+            haystackPreview: haystack.slice(0, 1500)
+          },
+          null,
+          2
+        )}\n`
+      );
+      console.log("Wrote visible scoring/team-count copy to .local/mock-room-facts.json");
+    }
     if (selectors.status.startsWith("UNCONFIGURED") || missing.length > 0 || unresolvedRequired.length > 0) {
       console.log("\nRead-only monitor cannot start yet.");
       console.log("Do not guess selectors from screenshots.");
@@ -113,10 +185,17 @@ export async function runCbsDiagnose(options: { mock?: boolean } = {}): Promise<
     console.log("\nRequired read selectors resolved on the live draft room.");
     if (mock) {
       console.log("You can run `npm run cbs:mock` next (recommend only, no clicks).");
+      if (clickMissing.length > 0) {
+        console.log(
+          `Click locators still unset (${clickMissing.join(", ")}). Capture them from the dump while YOU ARE ON THE CLOCK with the Draft button visible, then save to config/selectors.local.json. Do not guess.`
+        );
+      } else {
+        console.log("Click locators resolved. You can run `npm run cbs:mock-confirm`.");
+      }
     } else {
       console.log("You can run `npm run cbs:monitor` or `npm run cbs:recommend` next (no clicks).");
     }
-    console.log("Draft/search/confirm locators are still unset until those controls are visible.");
+    console.log("Draft/search/confirm locators stay unset until those controls are visible.");
   } finally {
     await session.context.close();
   }

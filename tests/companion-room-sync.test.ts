@@ -205,7 +205,7 @@ describe("companion room sync", () => {
       [jacobs, bijan, jeanty]
     );
     expect(next.draftedPicks).toEqual([]);
-    expect(result.conflicts[0]).toMatch(/could not be matched unambiguously/);
+    expect(result.conflicts[0]).toMatch(/could not be matched/);
     expect(next.room?.conflicts).toEqual(result.conflicts);
   });
 

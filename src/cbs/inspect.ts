@@ -84,6 +84,68 @@ const INSPECT_DOM_IIFE = `(() => {
   };
 })()`;
 
+export const CLICK_CONTROLS_IIFE = `(() => {
+  const visible = (el) => {
+    const r = el.getBoundingClientRect();
+    const st = getComputedStyle(el);
+    return r.width > 2 && r.height > 2 && st.visibility !== "hidden" && st.display !== "none";
+  };
+  const labelOf = (el) =>
+    (el.value || el.getAttribute("aria-label") || el.innerText || el.title || "").replace(/\\s+/g, " ").trim();
+  const popup = document.getElementById("DraftRoom.views.PlayerPopup");
+  const nodes = Array.from(document.querySelectorAll("button, input, a, [role='button']"));
+  return {
+    popupText: popup ? (popup.innerText || "").replace(/\\s+/g, " ").trim().slice(0, 500) : "",
+    popupChildCount: popup ? popup.querySelectorAll("button, input, a").length : 0,
+    controls: nodes
+      .filter(visible)
+      .map((el) => ({
+        tag: el.tagName.toLowerCase(),
+        id: el.id || null,
+        type: el.getAttribute("type"),
+        name: el.getAttribute("name"),
+        value: el.getAttribute("value"),
+        className: String(el.className || "").slice(0, 80),
+        label: labelOf(el).slice(0, 80)
+      }))
+      .filter((row) => row.label || row.id)
+      .slice(0, 80)
+  };
+})()`;
+
+export interface ClickControlDump {
+  popupText: string;
+  popupChildCount: number;
+  controls: Array<{
+    tag: string;
+    id: string | null;
+    type: string | null;
+    name: string | null;
+    value: string | null;
+    className: string;
+    label: string;
+  }>;
+}
+
+export async function dumpClickControls(page: Page): Promise<ClickControlDump> {
+  return page.evaluate(CLICK_CONTROLS_IIFE) as Promise<ClickControlDump>;
+}
+
+export function formatClickControlDump(dump: ClickControlDump): string[] {
+  const lines = [
+    "",
+    "Visible click controls (ads skipped in frame dump; this is the main room):",
+    `PlayerPopup text: ${dump.popupText || "(empty)"}`,
+    `PlayerPopup child buttons/inputs/links: ${dump.popupChildCount}`
+  ];
+  for (const control of dump.controls) {
+    lines.push(
+      `  ${control.tag}${control.id ? `#${control.id}` : ""} type=${control.type ?? ""} value=${JSON.stringify(control.value ?? "")} class=${control.className} label=${JSON.stringify(control.label)}`
+    );
+  }
+  return lines;
+}
+
 export async function inspectDraftRoom(page: Page): Promise<{ lines: string[]; frames: FrameInspect[] }> {
   const frames: FrameInspect[] = [];
   const lines: string[] = ["", "Live draft-room frame dump (ads/trackers skipped, no cookies):"];
@@ -132,6 +194,9 @@ export async function inspectDraftRoom(page: Page): Promise<{ lines: string[]; f
     frames.push(info);
   }
 
+  const clickDump = await dumpClickControls(page).catch(() => null);
+  if (clickDump) lines.push(...formatClickControlDump(clickDump));
+
   return { lines, frames };
 }
 
@@ -179,7 +244,12 @@ async function collectTextHits(frame: Frame): Promise<string[]> {
     /\b\d+:\d{2}\b/,
     /pickens my jeanty/i,
     /who's online/i,
-    /roster grid/i
+    /roster grid/i,
+    /\bppr\b/i,
+    /standard roster/i,
+    /flex roster/i,
+    /\b\d+\s+of\s+\d+\b/i,
+    /\b\d+\s*-?\s*teams?\b/i
   ];
   const hits: string[] = [];
   for (const pattern of patterns) {

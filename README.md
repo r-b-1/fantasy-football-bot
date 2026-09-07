@@ -165,6 +165,16 @@ npm run cbs:mock
 
 That opens `https://mockdraft.football.cbssports.com/`. Log in if needed, join a **12-team PPR Standard** mock yourself, then press Enter in the terminal when the draft room is open. When you are on the clock, the engine shortlist and (if `OPENAI_API_KEY` is set) the model choice print. Use `--no-ai` to skip the model. Do not open the All in the Family room with this command.
 
+Confirm-mode mock practice (public mock only; All in the Family stays recommend-only):
+
+```bash
+npm run cbs:mock-confirm
+```
+
+You still click Join. The command waits for the mock room, overlays team count and PPR vs Standard from visible text, recommends when you are up, and only after you press Enter it clicks Draft once and verifies the result. Search/draft locators must be captured from that room while YOU ARE UP (`npm run cbs:diagnose-mock`) and saved to `config/selectors.local.json`. Do not guess those locators. The SportsLine sheet remains CBS PPR 12-team even if the mock is 10-team or non-PPR.
+
+Mock diagnose uses a separate Chrome profile (`.local/cbs-mock-browser-profile`) so companion can keep the live room open. It opens the last mock room URL from `.local/mock-start-url.txt` when that file exists. Join or wait in the Chrome window this command opens, not in your own browser. The command waits until **YOU ARE UP** before dumping search/Draft locators.
+
 League-room recommend mode (still no clicks):
 
 ```bash
