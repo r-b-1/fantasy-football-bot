@@ -36,6 +36,7 @@
   "rosterMaximums": {},
   "executionMode": "recommend",
   "cbsExecutionEnabled": false,
+  "rosterGridPath": "docs/roster-grid (1).csv",
   "notes": [
     "Lineup was inferred from roster screenshots and should be verified in CBS settings.",
     "Exact late-round pick inventory should be re-read from CBS before the live draft.",

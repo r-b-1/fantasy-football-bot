@@ -1,4 +1,5 @@
 import { loadLeagueConfig, loadStrategyConfig } from "../config/load.js";
+import { loadRosterGrid } from "../data/rosterGrid.js";
 import { loadSportslineWorkbook } from "../data/sportsline.js";
 import { predictNextPicks } from "../ai/predict.js";
 import { formatProjection } from "../cli/format.js";
@@ -25,6 +26,7 @@ export async function runFixtureProjection(options: ProjectOptionConfig = {}): P
     loadSportslineWorkbook(process.env.SPORTSLINE_XLSX ?? "data/reference/cheatsheet_cbsppr12.xlsx"),
     new Set()
   );
+  const rosterGrid = league.rosterGridPath ? loadRosterGrid(league.rosterGridPath) : undefined;
   const selectors = loadSelectorConfig("config/selectors.fixture.json");
   assertFixtureSelectorConfig(selectors);
 
@@ -87,7 +89,8 @@ export async function runFixtureProjection(options: ProjectOptionConfig = {}): P
           state,
           league,
           strategy,
-          useAI
+          useAI,
+          rosterGrid
         });
         console.log(formatProjection(projection));
         if (eventLogPath && projection.projectedPicks.length > 0) {

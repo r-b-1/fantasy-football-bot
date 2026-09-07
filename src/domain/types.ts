@@ -68,7 +68,9 @@ export interface LeagueConfig {
   executionMode: ExecutionMode;
   cbsExecutionEnabled: boolean;
   /** When true, lock userTeamName / draft slot from the live YOU ARE UP state. */
-  inferUserTeamFromYouAreUp: boolean;
+  inferUserTeamFromYouAreUp?: boolean;
+  /** Path to a preseason roster CSV used for per-team need projection. */
+  rosterGridPath?: string;
   notes: string[];
 }
 

@@ -1,5 +1,6 @@
 import { loadLeagueConfig, loadStrategyConfig } from "../config/load.js";
 import { loadDraftFixture } from "../data/fixture.js";
+import { loadRosterGrid } from "../data/rosterGrid.js";
 import { loadSportslineWorkbook } from "../data/sportsline.js";
 import type { LivePlayer } from "../domain/types.js";
 import { predictNextPicks } from "../ai/predict.js";
@@ -50,13 +51,15 @@ export async function predictFixture(options: PredictFixtureOptions): Promise<st
   const fixture = loadDraftFixture(options.fixturePath);
   const { state } = buildDraftStateFromFixture(players, fixture, league, strategy);
   const livePlayers: LivePlayer[] = toLivePlayers(players, new Set());
+  const rosterGrid = league.rosterGridPath ? loadRosterGrid(league.rosterGridPath) : undefined;
   const projection = await predictNextPicks({
     players: livePlayers,
     state,
     league,
     strategy,
     useAI: options.useAI,
-    horizon: options.horizon
+    horizon: options.horizon,
+    rosterGrid
   });
   return formatProjection(projection);
 }

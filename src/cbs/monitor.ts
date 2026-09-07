@@ -1,4 +1,5 @@
 import { loadLeagueConfig, loadStrategyConfig } from "../config/load.js";
+import { loadRosterGrid } from "../data/rosterGrid.js";
 import { loadSportslineWorkbook } from "../data/sportsline.js";
 import { predictNextPicks } from "../ai/predict.js";
 import { formatProjection } from "../cli/format.js";
@@ -25,6 +26,7 @@ export async function runCbsMonitor(): Promise<void> {
     process.env.SPORTSLINE_XLSX ?? "data/reference/cheatsheet_cbsppr12.xlsx"
   );
   const players: LivePlayer[] = toLivePlayers(sportslinePlayers, new Set());
+  const rosterGrid = league.rosterGridPath ? loadRosterGrid(league.rosterGridPath) : undefined;
   const useAI = !process.argv.includes("--no-ai");
   const showProjection = !process.argv.includes("--no-projection");
 
@@ -102,7 +104,8 @@ export async function runCbsMonitor(): Promise<void> {
           state: draftState,
           league,
           strategy,
-          useAI
+          useAI,
+          rosterGrid
         });
         console.log(formatProjection(projected));
         if (eventLogPath && projected.projectedPicks.length > 0) {

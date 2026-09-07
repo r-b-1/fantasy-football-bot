@@ -51,6 +51,7 @@ export const LeagueConfigSchema = z.object({
   executionMode: z.enum(["monitor", "recommend", "confirm", "autopilot"]),
   cbsExecutionEnabled: z.boolean(),
   inferUserTeamFromYouAreUp: z.boolean().default(false),
+  rosterGridPath: z.string().min(1).optional(),
   notes: z.array(z.string())
 });
 
