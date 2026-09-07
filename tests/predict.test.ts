@@ -112,8 +112,8 @@ describe("AI projection layer", () => {
       useAI: true,
       model: modelReturning({
         picks: [
-          { playerId: "wr1::WR", playerName: "WR One", expectedOverallPick: 22, confidence: 0.81 },
-          { playerId: "rb1::RB", playerName: "RB One", expectedOverallPick: 24, confidence: 0.74 }
+          { playerId: "wr1::WR", playerName: "WR One", position: "WR", expectedOverallPick: 22, confidence: 0.81 },
+          { playerId: "rb1::RB", playerName: "RB One", position: "RB", expectedOverallPick: 24, confidence: 0.74 }
         ],
         rationale: "Top two by ADP."
       })
@@ -131,7 +131,7 @@ describe("AI projection layer", () => {
       useAI: true,
       model: modelReturning({
         picks: [
-          { playerId: "ghost::WR", playerName: "Ghost", expectedOverallPick: 22, confidence: 0.9 }
+          { playerId: "ghost::WR", playerName: "Ghost", position: "WR", expectedOverallPick: 22, confidence: 0.9 }
         ],
         rationale: "wrong"
       })
@@ -151,7 +151,7 @@ describe("AI projection layer", () => {
       timeoutMs: 20,
       model: modelReturning(
         {
-          picks: [{ playerId: "wr1::WR", playerName: "WR One", expectedOverallPick: 22, confidence: 0.9 }],
+          picks: [{ playerId: "wr1::WR", playerName: "WR One", position: "WR", expectedOverallPick: 22, confidence: 0.9 }],
           rationale: "ok"
         },
         200
@@ -195,8 +195,8 @@ describe("AI projection layer", () => {
       useAI: true,
       model: modelReturning({
         picks: [
-          { playerId: "wr1::WR", playerName: "WR One", expectedOverallPick: 22, confidence: 0.8 },
-          { playerId: "wr1::WR", playerName: "WR One", expectedOverallPick: 23, confidence: 0.7 }
+          { playerId: "wr1::WR", playerName: "WR One", position: "WR", expectedOverallPick: 22, confidence: 0.8 },
+          { playerId: "wr1::WR", playerName: "WR One", position: "WR", expectedOverallPick: 23, confidence: 0.7 }
         ],
         rationale: "dupe"
       })

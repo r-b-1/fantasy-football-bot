@@ -1,4 +1,4 @@
-import { chooseWithAI, defaultAIOptions } from "../ai/openai.js";
+import { chooseWithAI, defaultAIOptions } from "../ai/openrouter.js";
 import { loadLeagueConfig, loadStrategyConfig } from "../config/load.js";
 import { loadDraftFixture } from "../data/fixture.js";
 import { loadSportslineWorkbook } from "../data/sportsline.js";

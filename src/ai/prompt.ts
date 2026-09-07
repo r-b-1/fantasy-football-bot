@@ -14,8 +14,19 @@ export function buildSystemPrompt(league: LeagueConfig, strategy: StrategyConfig
     "ADP is market information; keepers distort live-draft pick equivalence.",
     "Prefer the best remaining roster/value outcome, not simply filling an empty slot.",
     `Soft plan if present is a hint, not a hard constraint. Shortlist size ${strategy.candidateShortlistSize}.`,
-    "Return a concise rationale."
-  ].join(" ");
+    "Return a concise rationale.",
+    "",
+    "OUTPUT FORMAT — STRICT:",
+    "Reply with a single JSON object and nothing else. No markdown. No code fences. No prose.",
+    "The first character of your reply must be '{' and the last character must be '}'.",
+    "Do not wrap the JSON in any commentary before or after it.",
+    "Required fields in the JSON:",
+    "  selectedCandidateId (string from candidateIds)",
+    "  confidence (number 0-1; how confident you are in the pick)",
+    "  rationale (string; 1-3 sentences explaining the choice)",
+    "  alternativeCandidateIds (array of up to 4 strings from candidateIds, excluding the selected one)",
+    "  riskFlags (array; e.g. [\"NONE\"] or [\"POSITION_RUN\",\"TIER_CLIFF\"])"
+  ].join("\n");
 }
 
 export function buildDecisionPayload(

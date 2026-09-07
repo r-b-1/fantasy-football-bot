@@ -1,15 +1,8 @@
 import { z } from "zod";
-import OpenAI from "openai";
-import { zodTextFormat } from "openai/helpers/zod";
-import type {
-  DraftState,
-  LeagueConfig,
-  LivePlayer,
-  NextPicksProjection,
-  ProjectedPick,
-  StrategyConfig
-} from "../domain/types.js";
+import { POSITIONS, type DraftState, type LeagueConfig, type LivePlayer, type NextPicksProjection, type Position, type ProjectedPick, type StrategyConfig } from "../domain/types.js";
 import { deterministicProjection, projectionHorizonFromStrategy } from "../engine/predict.js";
+import { OPENROUTER_DEFAULT_BASE_URL } from "./openrouter.js";
+import { stripMarkdownFences } from "./parse.js";
 
 export const ProjectionModelSchema = z.object({
   picks: z
@@ -17,6 +10,7 @@ export const ProjectionModelSchema = z.object({
       z.object({
         playerId: z.string().min(1),
         playerName: z.string().min(1),
+        position: z.enum(POSITIONS),
         expectedOverallPick: z.number().int().positive(),
         confidence: z.number().min(0).max(1)
       })
@@ -26,13 +20,11 @@ export const ProjectionModelSchema = z.object({
   rationale: z.string().max(400)
 });
 
-export type ProjectionModelOutput = z.infer<typeof ProjectionModelSchema>;
-
 export interface ProjectionAIOptions {
   model: string;
   timeoutMs: number;
   apiKey?: string | null;
-  reasoningEffort?: "none" | "minimal" | "low" | "medium" | "high";
+  baseURL?: string | null;
 }
 
 export interface ProjectionModel {
@@ -42,30 +34,46 @@ export interface ProjectionModel {
     userPayload: Record<string, unknown>;
     timeoutMs: number;
     abortSignal: AbortSignal;
-    reasoningEffort?: ProjectionAIOptions["reasoningEffort"];
   }): Promise<unknown>;
 }
 
-export function createOpenAIProjectionModel(apiKey: string): ProjectionModel {
-  const client = new OpenAI({
-    apiKey,
-    baseURL: process.env.OPENAI_BASE_URL ?? undefined
-  });
+export function createOpenRouterProjectionModel(
+  apiKey: string,
+  baseURL?: string | null
+): ProjectionModel {
+  const url = (baseURL ?? process.env.OPENROUTER_BASE_URL ?? OPENROUTER_DEFAULT_BASE_URL).replace(
+    /\/$/,
+    ""
+  );
   return {
     async parse(request) {
-      const response = await client.responses.parse(
-        {
+      const res = await fetch(`${url}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
           model: request.model,
-          reasoning: request.reasoningEffort ? { effort: request.reasoningEffort } : undefined,
-          input: [
+          messages: [
             { role: "system", content: request.systemPrompt },
             { role: "user", content: JSON.stringify(request.userPayload) }
-          ],
-          text: { format: zodTextFormat(ProjectionModelSchema, "next_picks_projection") }
-        },
-        { timeout: request.timeoutMs, signal: request.abortSignal }
-      );
-      return response.output_parsed;
+          ]
+        }),
+        signal: request.abortSignal
+      });
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        throw new Error(`OpenRouter HTTP ${res.status}: ${body.slice(0, 300)}`);
+      }
+      const json = (await res.json()) as {
+        choices?: Array<{ message?: { content?: string | null } }>;
+      };
+      const content = json.choices?.[0]?.message?.content ?? null;
+      if (process.env.AI_DEBUG) {
+        console.log("RAW_AI:", typeof content === "string" ? content.slice(0, 800) : content);
+      }
+      return content;
     }
   };
 }
@@ -83,15 +91,21 @@ export interface PredictArgs {
   strategy: StrategyConfig;
   useAI?: boolean;
   apiKey?: string | null;
+  baseURL?: string | null;
   model?: ProjectionModel;
   horizon?: number;
   timeoutMs?: number;
-  reasoningEffort?: ProjectionAIOptions["reasoningEffort"];
   aiModelName?: string;
 }
 
-const SYSTEM_PROMPT =
-  "You are a bounded fantasy-football projection layer. Given the current draft state, recent picks, roster composition, and the list of remaining players, predict the next several picks in order. Each projected pick must reference an id and name from the supplied remainingPlayers list — never invent a player. Return concise structured output only.";
+const SYSTEM_PROMPT = [
+  "You are a bounded fantasy-football projection layer. Given the current draft state, recent picks, roster composition, and the list of remaining players, predict the next several picks in order. Each projected pick must reference an id and name from the supplied remainingPlayers list — never invent a player.",
+  "",
+  "OUTPUT FORMAT — STRICT:",
+  "Reply with a single JSON object and nothing else. No markdown. No code fences. No prose.",
+  "The first character of your reply must be '{' and the last character must be '}'.",
+  "Do not wrap the JSON in any commentary before or after it."
+].join("\n");
 
 export async function predictNextPicks(args: PredictArgs): Promise<ProjectionResult> {
   const horizon = args.horizon ?? projectionHorizonFromStrategy(args.strategy);
@@ -107,11 +121,13 @@ export async function predictNextPicks(args: PredictArgs): Promise<ProjectionRes
   });
 
   const wantAI = args.useAI !== false;
-  const apiKey = args.apiKey ?? process.env.OPENAI_API_KEY ?? null;
-  const model = args.model ?? (wantAI && apiKey ? createOpenAIProjectionModel(apiKey) : null);
+  const apiKey = args.apiKey ?? process.env.OPENROUTER_API_KEY ?? null;
+  const model =
+    args.model ??
+    (wantAI && apiKey ? createOpenRouterProjectionModel(apiKey, args.baseURL) : null);
 
   if (!model) {
-    return withMeta(fallback, "deterministic", wantAI ? "OPENAI_API_KEY missing" : "AI disabled");
+    return withMeta(fallback, "deterministic", wantAI ? "OPENROUTER_API_KEY missing" : "AI disabled");
   }
 
   const payload = buildProjectionPayload(args.players, args.state, args.league, horizon);
@@ -128,8 +144,7 @@ export async function predictNextPicks(args: PredictArgs): Promise<ProjectionRes
   try {
     const parsed = await Promise.race([
       model.parse({
-        model: args.aiModelName ?? process.env.OPENAI_MODEL ?? "gpt-5.6",
-        reasoningEffort: args.reasoningEffort ?? "low",
+        model: args.aiModelName ?? process.env.OPENROUTER_MODEL ?? "minimax/minimax-m3:free",
         systemPrompt: SYSTEM_PROMPT,
         userPayload: payload,
         timeoutMs,
@@ -143,7 +158,7 @@ export async function predictNextPicks(args: PredictArgs): Promise<ProjectionRes
       })
     ]);
 
-    const validation = validateProjection(parsed, allowedIds, horizon);
+    const validation = validateProjection(stripMarkdownFences(parsed), allowedIds, horizon);
     if (!validation.ok) return withMeta(fallback, "deterministic", validation.reason);
     return withMeta(
       {
@@ -240,10 +255,11 @@ function validateProjection(
     }
     seen.add(pick.playerId);
     const playerName = pick.playerName;
+    const position = pick.position as Position;
     picks.push({
       playerId: pick.playerId,
       playerName,
-      position: "RB",
+      position,
       expectedOverallPick: pick.expectedOverallPick,
       confidence: pick.confidence,
       source: "ai"

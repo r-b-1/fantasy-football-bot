@@ -7,6 +7,7 @@ export const RISK_FLAGS = [
   "NONE",
   "POSITION_RUN",
   "TIER_CLIFF",
+  "TE_TIER_CLIFF",
   "ROSTER_IMBALANCE",
   "BYE_OVERLAP",
   "LOW_CONFIDENCE",
