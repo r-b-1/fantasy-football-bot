@@ -29,7 +29,10 @@ export interface DecisionModel {
 }
 
 export function createOpenAIDecisionModel(apiKey: string): DecisionModel {
-  const client = new OpenAI({ apiKey });
+  const client = new OpenAI({
+    apiKey,
+    baseURL: process.env.OPENAI_BASE_URL ?? undefined
+  });
   return {
     async parse(request) {
       const response = await client.responses.parse(

@@ -47,7 +47,10 @@ export interface ProjectionModel {
 }
 
 export function createOpenAIProjectionModel(apiKey: string): ProjectionModel {
-  const client = new OpenAI({ apiKey });
+  const client = new OpenAI({
+    apiKey,
+    baseURL: process.env.OPENAI_BASE_URL ?? undefined
+  });
   return {
     async parse(request) {
       const response = await client.responses.parse(
