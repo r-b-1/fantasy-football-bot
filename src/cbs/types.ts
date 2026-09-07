@@ -12,6 +12,7 @@ export interface LiveDraftControl {
   currentOverallPick: number | null;
   teamOnClock: string | null;
   isUserTurn: boolean;
+  youAreUp: boolean;
   clockSecondsRemaining: number | null;
 }
 

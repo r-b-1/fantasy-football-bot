@@ -50,6 +50,29 @@ export function leagueOrigin(draftRoomUrlPattern: string): string {
   return `https://${host}/`;
 }
 
+export const DEFAULT_CBS_MOCK_DRAFT_URL = "https://mockdraft.football.cbssports.com/";
+
+export function looksLikeCbsMockDraftLobby(url: string): boolean {
+  if (!isAllowedCbsUrl(url)) return false;
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    const path = parsed.pathname.toLowerCase().replace(/\/+$/, "") || "/";
+    if (host !== "mockdraft.football.cbssports.com") return false;
+    return path === "/" || path === "/mockdraft";
+  } catch {
+    return false;
+  }
+}
+
+export function isAllInTheFamilyHost(url: string): boolean {
+  try {
+    return hostnameOf(url) === "allfam.football.cbssports.com";
+  } catch {
+    return false;
+  }
+}
+
 /** League home, draft-central research, and news feeds are not the live draft room. */
 export function looksLikeCbsDraftRoom(url: string): boolean {
   if (!isAllowedCbsUrl(url)) return false;
@@ -57,7 +80,9 @@ export function looksLikeCbsDraftRoom(url: string): boolean {
     const parsed = new URL(url);
     const host = parsed.hostname.toLowerCase();
     const path = parsed.pathname.toLowerCase();
-    if (host.includes("mockdraft")) return true;
+    if (looksLikeCbsMockDraftLobby(url)) return false;
+    if (/^mockdraft-\d+\./.test(host)) return true;
+    if (host.includes("mockdraft") && path.includes("/mockdraft/")) return true;
     if (path.includes("draft-central")) return false;
     if (path.includes("draft-research")) return false;
     return path.includes("/draft/live") || path.includes("/draft/room");
@@ -69,9 +94,17 @@ export function looksLikeCbsDraftRoom(url: string): boolean {
 /** CBS often opens the draft room in a popup. Prefer the live room over draft-central. */
 export function pickDraftRoomUrl(urls: string[], preferredPattern?: string): string | null {
   if (preferredPattern) {
-    const preferred = urls.find((url) => url.includes(preferredPattern));
+    const preferred = urls.find((url) => url.includes(preferredPattern) && looksLikeCbsDraftRoom(url));
     if (preferred) return preferred;
   }
+  const mockRoom = urls.find((url) => {
+    try {
+      return looksLikeCbsDraftRoom(url) && /^mockdraft-\d+\./.test(hostnameOf(url));
+    } catch {
+      return false;
+    }
+  });
+  if (mockRoom) return mockRoom;
   const live = urls.find((url) => {
     try {
       return looksLikeCbsDraftRoom(url) && new URL(url).pathname.toLowerCase().includes("/draft/live");

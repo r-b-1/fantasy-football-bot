@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chooseWithAI, type DecisionModel } from "../src/ai/openai.js";
+import { chooseWithAI, type DecisionModel } from "../src/ai/openrouter.js";
 import { buildDecisionPayload } from "../src/ai/prompt.js";
 import { loadLeagueConfig, loadStrategyConfig } from "../src/config/load.js";
 import type { CandidateScore, DraftState, LivePlayer } from "../src/domain/types.js";
@@ -164,15 +164,15 @@ describe("bounded AI decision layer", () => {
   });
 
   it("falls back when no API key or model is configured", async () => {
-    const previous = process.env.OPENAI_API_KEY;
-    delete process.env.OPENAI_API_KEY;
+    const previous = process.env.OPENROUTER_API_KEY;
+    delete process.env.OPENROUTER_API_KEY;
     const decision = await chooseWithAI(candidates, state, league, strategy, {
       ...options,
       apiKey: null
     });
-    if (previous === undefined) delete process.env.OPENAI_API_KEY;
-    else process.env.OPENAI_API_KEY = previous;
+    if (previous === undefined) delete process.env.OPENROUTER_API_KEY;
+    else process.env.OPENROUTER_API_KEY = previous;
     expect(decision.source).toBe("deterministic_fallback");
-    expect(decision.fallbackReason).toMatch(/OPENAI_API_KEY/);
+    expect(decision.fallbackReason).toMatch(/OPENROUTER_API_KEY/);
   });
 });

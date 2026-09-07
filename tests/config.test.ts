@@ -15,7 +15,18 @@ describe("config validation", () => {
     expect(league.cbsExecutionEnabled).toBe(false);
     expect(league.keepers.map((k) => k.name)).toEqual(["Ashton Jeanty", "George Pickens"]);
     expect(league.completedTrades).toHaveLength(1);
+    expect(league.inferUserTeamFromYouAreUp).toBe(false);
     expect(strategy.candidateShortlistSize).toBe(7);
+  });
+
+  it("loads the public mock-draft league without keepers or live clicking", () => {
+    const mock = loadLeagueConfig("config/league.mock.json");
+    expect(mock.teamCount).toBe(12);
+    expect(mock.keepers).toEqual([]);
+    expect(mock.keeperSlots).toBe(0);
+    expect(mock.cbsExecutionEnabled).toBe(false);
+    expect(mock.executionMode).toBe("recommend");
+    expect(mock.inferUserTeamFromYouAreUp).toBe(true);
   });
 
   it("rejects strategy weights that do not sum to 1", () => {

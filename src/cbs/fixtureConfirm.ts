@@ -1,8 +1,6 @@
 import { loadLeagueConfig, loadStrategyConfig } from "../config/load.js";
 import { loadSportslineWorkbook } from "../data/sportsline.js";
-import { deterministicDecision } from "../engine/decision.js";
-import { generateShortlist } from "../engine/shortlist.js";
-import { formatRecommendation } from "../cli/format.js";
+import { recommendTurn } from "../engine/recommend.js";
 import { appendEvent } from "../state/eventLog.js";
 import { isAllowedCbsUrl } from "./allowlist.js";
 import { FixtureExecutor } from "./fixtureExecutor.js";
@@ -69,32 +67,20 @@ export async function runFixtureConfirm(options: FixtureConfirmOptions = {}): Pr
         if (logPath) {
           appendEvent(logPath, { type: "our_turn", overallPick: current });
         }
-        const state = await reader.readDraftState(players);
-        const ranked = generateShortlist(
-          players.map((player) => ({ ...player, available: state.availablePlayerIds.has(player.id) })),
+        const state = await reader.readDraftState(players, { recentPickWindow: strategy.recentPickWindow });
+        const rankedResult = await recommendTurn({
+          players,
           state,
           league,
-          strategy
-        );
-        const decision = deterministicDecision(ranked);
-        console.log(formatRecommendation(ranked, state, league, decision, { explain: "top" }));
+          strategy,
+          eventLogPath: logPath,
+          explain: "top"
+        });
+        console.log(rankedResult.output);
         const selected =
-          ranked.find((candidate) => candidate.player.id === decision.selectedCandidateId) ?? ranked[0]!;
-        if (logPath) {
-          appendEvent(logPath, {
-            type: "shortlist",
-            overallPick: current,
-            candidateIds: ranked.map((candidate) => candidate.player.id)
-          });
-          appendEvent(logPath, {
-            type: "recommendation",
-            overallPick: current,
-            candidateId: selected.player.id,
-            playerName: selected.player.name,
-            score: selected.score,
-            notes: selected.notes
-          });
-        }
+          rankedResult.ranked.find(
+            (candidate) => candidate.player.id === rankedResult.decision.selectedCandidateId
+          ) ?? rankedResult.ranked[0]!;
         if (!options.autoConfirm) {
           await waitForManualLogin(
             `Press Enter to draft ${selected.player.name} on the FAKE room (not CBS). Type Ctrl+C to stop.\n`

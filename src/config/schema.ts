@@ -50,6 +50,7 @@ export const LeagueConfigSchema = z.object({
   }),
   executionMode: z.enum(["monitor", "recommend", "confirm", "autopilot"]),
   cbsExecutionEnabled: z.boolean(),
+  inferUserTeamFromYouAreUp: z.boolean().default(false),
   notes: z.array(z.string())
 });
 
@@ -108,8 +109,11 @@ export const DraftFixtureSchema = z.object({
 
 export const DraftDecisionModelSchema = z.object({
   selectedCandidateId: z.string(),
-  confidence: z.number().min(0).max(1),
-  rationale: z.string().max(600),
-  alternativeCandidateIds: z.array(z.string()).max(4),
-  riskFlags: z.array(z.enum(RISK_FLAGS))
+  confidence: z.number().min(0).max(1).default(0.6),
+  rationale: z
+    .string()
+    .default("")
+    .transform((text) => (text.length > 600 ? `${text.slice(0, 597)}...` : text)),
+  alternativeCandidateIds: z.array(z.string()).default([]).transform((ids) => ids.slice(0, 4)),
+  riskFlags: z.array(z.enum(RISK_FLAGS)).default(["NONE"])
 });

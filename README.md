@@ -112,6 +112,7 @@ The engine is fully unit-testable with no browser and no network. Browser automa
 - Playwright persistent context; manual login
 - Domain allowlist
 - Read-only live-room adapter and diagnostics
+- Live `recommend` loop and public CBS mock join helper (no Join/Draft clicks)
 - Local fake draft room for executor tests (verified picks, duplicate-submit rejection, wrong-player lockout)
 - Live pick clicking remains gated until mock-draft validation — on purpose
 
@@ -154,6 +155,20 @@ Read-only CBS monitor — opens a visible browser; you log in yourself:
 
 ```bash
 npm run cbs:monitor
+```
+
+Join a public CBS mock and print live recommendations (no clicks; you still pick in the browser):
+
+```bash
+npm run cbs:mock
+```
+
+That opens `https://mockdraft.football.cbssports.com/`. Log in if needed, join a **12-team PPR Standard** mock yourself, then press Enter in the terminal when the draft room is open. When you are on the clock, the engine shortlist and (if `OPENAI_API_KEY` is set) the model choice print. Use `--no-ai` to skip the model. Do not open the All in the Family room with this command.
+
+League-room recommend mode (still no clicks):
+
+```bash
+npm run cbs:recommend
 ```
 
 Do not put a CBS password in `.env`. The only optional secret is an OpenAI API key.

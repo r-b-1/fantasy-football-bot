@@ -7,6 +7,7 @@ export const RISK_FLAGS = [
   "NONE",
   "POSITION_RUN",
   "TIER_CLIFF",
+  "TE_TIER_CLIFF",
   "ROSTER_IMBALANCE",
   "BYE_OVERLAP",
   "LOW_CONFIDENCE",
@@ -66,6 +67,8 @@ export interface LeagueConfig {
   rosterMaximums: Partial<Record<Position, number>>;
   executionMode: ExecutionMode;
   cbsExecutionEnabled: boolean;
+  /** When true, lock userTeamName / draft slot from the live YOU ARE UP state. */
+  inferUserTeamFromYouAreUp: boolean;
   notes: string[];
 }
 
@@ -181,4 +184,22 @@ export interface DraftFixture {
   teamOnClock?: string | null;
   keepers: FixtureKeeper[];
   drafted: FixturePick[];
+}
+
+export interface ProjectedPick {
+  playerId: string;
+  playerName: string;
+  position: Position;
+  expectedOverallPick: number;
+  confidence: number;
+  source: "ai" | "deterministic";
+  fallbackReason?: string;
+}
+
+export interface NextPicksProjection {
+  generatedAt: string;
+  currentOverallPick: number;
+  horizon: number;
+  projectedPicks: ProjectedPick[];
+  notes: string[];
 }

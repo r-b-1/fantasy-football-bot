@@ -1,5 +1,9 @@
-import { loadLeagueConfig } from "../config/load.js";
+import { loadLeagueConfig, loadStrategyConfig } from "../config/load.js";
 import { loadSportslineWorkbook } from "../data/sportsline.js";
+import { predictNextPicks } from "../ai/predict.js";
+import { formatProjection } from "../cli/format.js";
+import type { LivePlayer } from "../domain/types.js";
+import { toLivePlayers } from "../engine/state.js";
 import { appendEvent } from "../state/eventLog.js";
 import { resyncFromDraftResults } from "./resync.js";
 import { CBSReader } from "./reader.js";
@@ -11,11 +15,18 @@ import { selectorsUnconfigured } from "./errors.js";
 
 export async function runCbsMonitor(): Promise<void> {
   const selectorPath = resolveSelectorConfigPath();
+  console.log(`Selector config: ${selectorPath}`);
   const league = loadLeagueConfig(process.env.LEAGUE_CONFIG ?? "config/league.current.json");
+  const strategy = loadStrategyConfig(
+    process.env.STRATEGY_CONFIG ?? "config/strategy.current.json"
+  );
   const selectors = loadSelectorConfig(selectorPath);
-  const players = loadSportslineWorkbook(
+  const sportslinePlayers = loadSportslineWorkbook(
     process.env.SPORTSLINE_XLSX ?? "data/reference/cheatsheet_cbsppr12.xlsx"
   );
+  const players: LivePlayer[] = toLivePlayers(sportslinePlayers, new Set());
+  const useAI = !process.argv.includes("--no-ai");
+  const showProjection = !process.argv.includes("--no-projection");
 
   try {
     assertLiveSelectorConfig(selectors);
@@ -79,6 +90,36 @@ export async function runCbsMonitor(): Promise<void> {
             position: event.position
           });
           seenPicks.add(event.overallPick);
+        }
+      }
+
+      if (showProjection && !snapshot.control.isUserTurn) {
+        const draftState = await reader.readDraftState(players, {
+          recentPickWindow: strategy.recentPickWindow
+        });
+        const projected = await predictNextPicks({
+          players,
+          state: draftState,
+          league,
+          strategy,
+          useAI
+        });
+        console.log(formatProjection(projected));
+        if (eventLogPath && projected.projectedPicks.length > 0) {
+          appendEvent(eventLogPath, {
+            type: "projection",
+            overallPick: projected.currentOverallPick,
+            horizon: projected.horizon,
+            source: projected.source,
+            picks: projected.projectedPicks.map((pick) => ({
+              playerId: pick.playerId,
+              playerName: pick.playerName,
+              position: pick.position,
+              expectedOverallPick: pick.expectedOverallPick,
+              confidence: pick.confidence
+            })),
+            ...(projected.fallbackReason ? { fallbackReason: projected.fallbackReason } : {})
+          });
         }
       }
 

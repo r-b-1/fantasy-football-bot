@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "engines": {"node": ">=20"},
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "tsx src/index.ts",
     "typecheck": "tsc --noEmit",
@@ -13,17 +15,19 @@
     "rank:fixture": "tsx src/index.ts rank-fixture",
     "decide:fixture": "tsx src/index.ts decide-fixture",
     "demo:replay": "tsx src/index.ts demo-replay",
+    "predict:fixture": "tsx src/index.ts predict-fixture",
     "cbs:monitor": "tsx src/index.ts cbs-monitor",
+    "cbs:recommend": "tsx src/index.ts cbs-recommend",
+    "cbs:mock": "tsx src/index.ts cbs-mock",
     "cbs:diagnose": "tsx src/index.ts cbs-diagnose",
     "cbs:fixture": "tsx src/index.ts cbs-fixture",
     "cbs:fixture-confirm": "tsx src/index.ts cbs-fixture-confirm"
   },
   "dependencies": {
     "dotenv": "^16.6.1",
-    "openai": "7.4.0",
     "playwright": "1.62.1",
     "xlsx": "0.18.5",
-    "zod": "4.4.3"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
