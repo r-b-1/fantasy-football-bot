@@ -47,6 +47,8 @@
         <thead><tr><th>#</th><th>Team</th><th>Player</th></tr></thead>
         <tbody id="results"></tbody>
       </table>
+      <h2 style="margin-top:18px">League-wide keepers</h2>
+      <ul id="league-keepers" data-testid="league-keepers"></ul>
     </section>
     <section class="card">
       <h2>Pickens My Jeanty roster</h2>
@@ -77,6 +79,7 @@
     const youAreUp = document.getElementById("you-are-up");
     const resultsBody = document.getElementById("results");
     const rosterEl = document.getElementById("roster");
+    const leagueKeepersEl = document.getElementById("league-keepers");
     const searchInput = document.getElementById("player-search");
     const draftBtn = document.getElementById("draft-action");
     const confirmBtn = document.getElementById("draft-confirmation");
@@ -105,6 +108,16 @@
       rosterEl.innerHTML = ours.map((line) => '<li data-testid="roster-player">' + line + "</li>").join("");
     }
 
+    function renderLeagueKeepers(keepers) {
+      const lines = keepers
+        .slice()
+        .sort((a, b) => a.fantasyTeam.localeCompare(b.fantasyTeam))
+        .map((k) => k.fantasyTeam + ": " + k.name + " (" + k.position + ")");
+      leagueKeepersEl.innerHTML = lines
+        .map((line) => '<li data-testid="league-keeper">' + line + "</li>")
+        .join("");
+    }
+
     function renderResults(results) {
       resultsBody.innerHTML = results.map((p) => {
         const ours = p.fantasyTeam === USER ? " ours" : "";
@@ -126,6 +139,7 @@
       youAreUp.classList.toggle("visible", team === USER);
       renderResults(results);
       renderRoster(script.keepers, results);
+      renderLeagueKeepers(script.keepers);
     }
 
     function nextAutopick(script, takenNames) {
@@ -150,6 +164,7 @@
       youAreUp.classList.toggle("visible", team === USER);
       renderResults(window.__results);
       renderRoster(window.__script.keepers, window.__results);
+      renderLeagueKeepers(window.__script.keepers);
       searchInput.disabled = !ours;
       draftBtn.disabled = !ours || Boolean(window.__pendingPlayer);
       confirmBtn.disabled = !ours || !window.__pendingPlayer;

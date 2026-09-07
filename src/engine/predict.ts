@@ -13,6 +13,7 @@ import { computeTeamNeeds, scoreProjectedPickForTeam } from "./teamNeed.js";
 export interface DeterministicProjectionOptions {
   horizon?: number;
   rosterGrid?: RosterGrid;
+  keepers?: Array<{ fantasyTeam: string; playerName: string; position: Position }>;
 }
 
 const POSITION_LIMITS: Record<Position, number> = {
@@ -105,7 +106,8 @@ function needAwareProjection(
       position: event.position
     })),
     nextPicksByTeam: new Map(),
-    league
+    league,
+    keepers: options.keepers
   });
 
   const snakeSlotByPick = (overallPick: number) => {

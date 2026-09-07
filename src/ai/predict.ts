@@ -117,6 +117,7 @@ export interface PredictArgs {
   timeoutMs?: number;
   aiModelName?: string;
   rosterGrid?: RosterGrid;
+  keepers?: Array<{ fantasyTeam: string; playerName: string; position: Position }>;
 }
 
 const SYSTEM_PROMPT = [
@@ -140,7 +141,8 @@ export async function predictNextPicks(args: PredictArgs): Promise<ProjectionRes
   const horizon = args.horizon ?? projectionHorizonFromStrategy(args.strategy);
   const fallback = deterministicProjection(args.players, args.state, args.league, args.strategy, {
     horizon,
-    rosterGrid: args.rosterGrid
+    rosterGrid: args.rosterGrid,
+    keepers: args.keepers
   });
   const started = Date.now();
   const withMeta = (projection: NextPicksProjection, source: ProjectionResult["source"], reason?: string): ProjectionResult => ({
@@ -160,7 +162,7 @@ export async function predictNextPicks(args: PredictArgs): Promise<ProjectionRes
     return withMeta(fallback, "deterministic", wantAI ? "OPENROUTER_API_KEY missing" : "AI disabled");
   }
 
-  const payload = buildProjectionPayload(args.players, args.state, args.league, horizon, args.rosterGrid);
+  const payload = buildProjectionPayload(args.players, args.state, args.league, horizon, args.rosterGrid, args.keepers);
   const allowedIds = new Set(
     args.players
       .filter((player) => player.available && args.state.availablePlayerIds.has(player.id))
@@ -213,7 +215,8 @@ function buildProjectionPayload(
   state: DraftState,
   league: LeagueConfig,
   horizon: number,
-  rosterGrid?: RosterGrid
+  rosterGrid?: RosterGrid,
+  keepers?: Array<{ fantasyTeam: string; playerName: string; position: Position }>
 ): Record<string, unknown> {
   const available = players
     .filter((player) => player.available && state.availablePlayerIds.has(player.id))
@@ -269,7 +272,12 @@ function buildProjectionPayload(
         position: event.position
       })),
       nextPicksByTeam,
-      league
+      league,
+      keepers: (keepers ?? []).map((k) => ({
+        fantasyTeam: k.fantasyTeam,
+        playerName: k.playerName,
+        position: k.position
+      }))
     });
     payload.teamNeeds = teamNeeds.map((need) => ({
       teamName: need.teamName,

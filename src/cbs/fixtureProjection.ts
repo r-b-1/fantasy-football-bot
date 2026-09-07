@@ -1,9 +1,10 @@
 import { loadLeagueConfig, loadStrategyConfig } from "../config/load.js";
-import { loadRosterGrid } from "../data/rosterGrid.js";
+import { loadRosterGrid, type RosterGrid } from "../data/rosterGrid.js";
 import { loadSportslineWorkbook } from "../data/sportsline.js";
 import { predictNextPicks } from "../ai/predict.js";
 import { formatProjection } from "../cli/format.js";
-import type { LivePlayer } from "../domain/types.js";
+import fs from "node:fs";
+import type { LivePlayer, Position } from "../domain/types.js";
 import { isAllowedCbsUrl } from "./allowlist.js";
 import { startFixtureServer } from "./fixtureServer.js";
 import { CBSReader } from "./reader.js";
@@ -11,6 +12,17 @@ import { assertFixtureSelectorConfig, loadSelectorConfig } from "./selectors.js"
 import { closeSession, openEphemeralBrowser } from "./session.js";
 import { appendEvent } from "../state/eventLog.js";
 import { toLivePlayers } from "../engine/state.js";
+
+interface RichFixtureScript {
+  keepers: Array<{ name: string; position: Position; fantasyTeam: string }>;
+  teams?: string[];
+  autopickPool?: Array<{ name: string; position: Position; _skip?: boolean }>;
+  userDraftSlots?: number[];
+}
+
+function loadRichFixtureScript(path: string): RichFixtureScript {
+  return JSON.parse(fs.readFileSync(path, "utf8")) as RichFixtureScript;
+}
 
 export interface ProjectOptionConfig {
   headless?: boolean;
@@ -28,6 +40,8 @@ export async function runFixtureProjection(options: ProjectOptionConfig = {}): P
     new Set()
   );
   const rosterGrid = league.rosterGridPath ? loadRosterGrid(league.rosterGridPath) : undefined;
+  const richScriptPath = process.env.RICH_FIXTURE ?? "fixtures/fixture-16team-rich.json";
+  const richScript = loadRichFixtureScript(richScriptPath);
   const selectors = loadSelectorConfig("config/selectors.fixture.json");
   assertFixtureSelectorConfig(selectors);
 
@@ -92,7 +106,12 @@ export async function runFixtureProjection(options: ProjectOptionConfig = {}): P
           league,
           strategy,
           useAI,
-          rosterGrid
+          rosterGrid,
+          keepers: richScript.keepers.map((k) => ({
+            fantasyTeam: k.fantasyTeam,
+            playerName: k.name,
+            position: k.position
+          }))
         });
         console.log(formatProjection(projection));
         if (eventLogPath && projection.projectedPicks.length > 0) {

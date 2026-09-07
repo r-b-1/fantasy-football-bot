@@ -34,10 +34,11 @@ export function computeTeamNeeds(args: {
   drafted: Array<{ fantasyTeam: string; playerName: string; position?: Position }>;
   nextPicksByTeam: Map<string, number>;
   league: LeagueConfig;
+  keepers?: Array<{ fantasyTeam: string; playerName: string; position: Position }>;
 }): TeamNeed[] {
-  const merged = mergeDraftedIntoRoster(args.rosterGrid, args.drafted);
+  const merged = mergeDraftedAndKeepers(args.rosterGrid, args.drafted, args.keepers ?? []);
   const teams = allTeamNames(merged).map((name) => {
-    const team = teamByName(merged, name)!;
+    const team = byTeam(merged, name)!;
     const gaps: Partial<Record<Position, number>> = {};
     let totalGap = 0;
     for (const position of POSITIONS) {
@@ -110,9 +111,16 @@ export function weightedNextPickByTeam(args: {
   return result;
 }
 
-function mergeDraftedIntoRoster(
+function byTeam(roster: RosterGrid, name: string): ReturnedGroup | undefined {
+  return roster.teams.find((team) => team.teamName.toLowerCase() === name.toLowerCase()) as
+    | ReturnedGroup
+    | undefined;
+}
+
+function mergeDraftedAndKeepers(
   roster: RosterGrid,
-  drafted: Array<{ fantasyTeam: string; playerName: string; position?: Position }>
+  drafted: Array<{ fantasyTeam: string; playerName: string; position?: Position }>,
+  keepers: Array<{ fantasyTeam: string; playerName: string; position: Position }>
 ): RosterGrid {
   const byTeam = new Map<string, ReturnedGroup>();
   for (const team of roster.teams) {
@@ -121,16 +129,28 @@ function mergeDraftedIntoRoster(
       starters: structuredClone(team.starters)
     });
   }
-  for (const pick of drafted) {
-    const key = pick.fantasyTeam.toLowerCase();
+  const apply = (
+    fantasyTeam: string,
+    playerName: string,
+    position: Position,
+    isRookie: boolean
+  ) => {
+    const key = fantasyTeam.toLowerCase();
     const team = byTeam.get(key);
-    if (!team || !pick.position) continue;
-    const position = pick.position;
+    if (!team) return;
     const existing = team.starters[position] ?? [];
+    if (existing.some((e) => e.name.toLowerCase() === playerName.toLowerCase())) return;
     team.starters = {
       ...team.starters,
-      [position]: [...existing, { name: pick.playerName, position, isRookie: false }]
+      [position]: [...existing, { name: playerName, position, isRookie }]
     };
+  };
+  for (const pick of drafted) {
+    if (!pick.position) continue;
+    apply(pick.fantasyTeam, pick.playerName, pick.position, false);
+  }
+  for (const keeper of keepers) {
+    apply(keeper.fantasyTeam, keeper.playerName, keeper.position, false);
   }
   return {
     ...roster,
