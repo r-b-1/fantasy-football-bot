@@ -90,12 +90,20 @@ export function formatRecommendation(
   state: DraftState,
   league: LeagueConfig,
   decision: DraftDecision,
-  options: { explain?: "all" | "top" | "none" } = {}
+  options: { explain?: "all" | "top" | "none"; previewForTeam?: string } = {}
 ): string {
   const selected =
     ranked.find((candidate) => candidate.player.id === decision.selectedCandidateId) ?? ranked[0];
   const fallback = ranked[0];
+  const preview =
+    options.previewForTeam != null
+      ? [
+          `LIKELY PICK FOR ${options.previewForTeam} — same recommend banner you'll see on your turn`,
+          ""
+        ]
+      : [];
   const lines = [
+    ...preview,
     formatShortlist(ranked, state, league, options),
     "",
     decision.source === "ai"

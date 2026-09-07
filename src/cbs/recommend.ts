@@ -1,18 +1,24 @@
 import type { Page } from "playwright";
 import { loadLeagueConfig, loadStrategyConfig } from "../config/load.js";
+import { loadRosterGrid, type RosterGrid } from "../data/rosterGrid.js";
+import { resolveProjectionKeepers, type LeagueKeeper } from "../data/leagueKeepers.js";
 import { loadSportslineWorkbook } from "../data/sportsline.js";
 import type { LeagueConfig, SportslinePlayer, StrategyConfig } from "../domain/types.js";
-import { applyLiveTurnIdentity } from "../engine/state.js";
+import { applyLiveTurnIdentity, toLivePlayers } from "../engine/state.js";
 import { recommendTurn, shouldRecommendForTurn } from "../engine/recommend.js";
+import { shouldProjectForTurn } from "../engine/predict.js";
+import { predictNextPicks } from "../ai/predict.js";
+import { formatProjection } from "../cli/format.js";
+import { draftStateForOnClockTeam } from "../engine/onClockPreview.js";
 import { appendEvent } from "../state/eventLog.js";
 import {
-  DEFAULT_CBS_MOCK_DRAFT_URL,
   isAllInTheFamilyHost,
   isAllowedCbsUrl,
-  leagueOrigin,
+  leagueStartUrl,
   looksLikeCbsDraftRoom
 } from "./allowlist.js";
 import { CbsError } from "./errors.js";
+import { EngineError } from "../domain/errors.js";
 import { probeSelector } from "./locators.js";
 import { formatClockSeconds, formatOnClockStatus } from "./parse.js";
 import { CBSReader } from "./reader.js";
@@ -24,7 +30,8 @@ import {
   resolveSelectorConfigPath,
   type SelectorConfig
 } from "./selectors.js";
-import { openLoggedInDraftRoom } from "./session.js";
+import { resolveMockDraftStartUrl } from "./mockStartUrl.js";
+import { openLoggedInDraftRoom, resolveCbsBrowserProfileDir } from "./session.js";
 
 export interface LiveRecommendOptions {
   useAI?: boolean;
@@ -33,6 +40,8 @@ export interface LiveRecommendOptions {
   refuseLeagueRoom?: boolean;
   prompt?: string;
   preferredPattern?: string;
+  showProjection?: boolean;
+  profileDir?: string;
 }
 
 function mockJoinPrompt(): string {
@@ -78,7 +87,7 @@ async function waitUntilSelectorsResolve(page: Page, selectors: SelectorConfig):
   }
   if (last.length > 0) {
     throw new Error(
-      `Required CBS read locators missed the page (${last.join(", ")}). Run \`npm run cbs:diagnose\` or \`npm run cbs:diagnose -- --mock\` in this room. Do not guess selectors.`
+      `Required CBS read locators missed the page (${last.join(", ")}). Run \`npm run cbs:diagnose\` or \`npm run cbs:diagnose-mock\` in this room. Do not guess selectors.`
     );
   }
 }
@@ -95,6 +104,9 @@ export async function runCbsRecommend(options: LiveRecommendOptions = {}): Promi
     process.env.SPORTSLINE_XLSX ?? "data/reference/cheatsheet_cbsppr12.xlsx"
   );
   const useAI = options.useAI ?? true;
+  const showProjection = options.showProjection ?? !process.argv.includes("--no-projection");
+  const rosterGrid = league.rosterGridPath ? loadRosterGrid(league.rosterGridPath) : undefined;
+  const keepers = resolveProjectionKeepers(league);
 
   try {
     assertLiveSelectorConfig(selectors);
@@ -122,14 +134,14 @@ export async function runCbsRecommend(options: LiveRecommendOptions = {}): Promi
   const startUrl =
     options.startUrl ??
     process.env.CBS_DRAFT_START_URL ??
-    leagueOrigin(selectors.draftRoomUrlPattern);
+    leagueStartUrl(selectors.draftRoomUrlPattern);
   if (!isAllowedCbsUrl(startUrl)) {
     console.error(`Refusing non-CBS start URL: ${startUrl}`);
     process.exitCode = 2;
     return;
   }
 
-  const profileDir = process.env.CBS_BROWSER_PROFILE_DIR ?? ".local/cbs-browser-profile";
+  const profileDir = options.profileDir ?? resolveCbsBrowserProfileDir("live");
   const eventLogPath = process.env.EVENT_LOG;
   const refuseLeagueRoom = options.refuseLeagueRoom ?? false;
   const { session, focused } = await openLoggedInDraftRoom({
@@ -161,6 +173,9 @@ export async function runCbsRecommend(options: LiveRecommendOptions = {}): Promi
     console.log(
       `RECOMMEND MODE — no clicks. ${useAI ? "OpenAI will rank the shortlist when a key is present." : "Deterministic engine only."}`
     );
+    console.log(
+      "While another team is on the clock, you'll see their likely pick in the same banner you'll get on your turn."
+    );
     console.log("Ctrl+C to stop. You must make the pick in CBS yourself.");
 
     await runRecommendPollLoop({
@@ -170,6 +185,9 @@ export async function runCbsRecommend(options: LiveRecommendOptions = {}): Promi
       strategy,
       players,
       useAI,
+      showProjection,
+      rosterGrid,
+      keepers,
       eventLogPath,
       refuseLeagueRoom
     });
@@ -181,10 +199,11 @@ export async function runCbsRecommend(options: LiveRecommendOptions = {}): Promi
 export async function runCbsMockDraft(options: { useAI?: boolean } = {}): Promise<void> {
   await runCbsRecommend({
     useAI: options.useAI ?? true,
-    startUrl: process.env.CBS_MOCK_DRAFT_URL ?? DEFAULT_CBS_MOCK_DRAFT_URL,
+    startUrl: resolveMockDraftStartUrl(),
     leaguePath: process.env.CBS_MOCK_LEAGUE_CONFIG ?? "config/league.mock.json",
     refuseLeagueRoom: true,
-    prompt: mockJoinPrompt()
+    prompt: mockJoinPrompt(),
+    profileDir: resolveCbsBrowserProfileDir("mock")
   });
 }
 
@@ -199,12 +218,20 @@ export async function runRecommendPollLoop(args: {
   refuseLeagueRoom?: boolean;
   intervalMs?: number;
   untilPick?: number;
+  showProjection?: boolean;
+  rosterGrid?: RosterGrid;
+  keepers?: LeagueKeeper[];
   onRecommendation?: (overallPick: number) => void;
+  onProjection?: (overallPick: number) => void;
+  onOnClockPreview?: (info: { overallPick: number; teamName: string; output: string }) => void;
 }): Promise<void> {
   const reader = new CBSReader(args.page, args.selectors, args.league);
   let league = args.league;
   const seenPicks = new Set<number>();
   const recommendedTurns = new Set<number>();
+  const projectedTurns = new Set<number>();
+  const showProjection = args.showProjection ?? true;
+  const livePlayers = toLivePlayers(args.players, new Set());
 
   for (;;) {
     if (args.refuseLeagueRoom && isAllInTheFamilyHost(args.page.url())) {
@@ -291,6 +318,82 @@ export async function runRecommendPollLoop(args: {
       console.log(result.output);
       recommendedTurns.add(turn);
       args.onRecommendation?.(turn);
+    } else {
+      const projectTurn = shouldProjectForTurn(
+        showProjection,
+        snapshot.control.isUserTurn,
+        snapshot.control.currentOverallPick,
+        projectedTurns
+      );
+      if (projectTurn != null) {
+        const state = await reader.readDraftState(args.players, {
+          recentPickWindow: args.strategy.recentPickWindow
+        });
+        const teamOnClock = snapshot.control.teamOnClock;
+        if (teamOnClock && !/waiting for start/i.test(teamOnClock)) {
+          const previewState = draftStateForOnClockTeam({
+            state,
+            teamName: teamOnClock,
+            league,
+            players: args.players,
+            keepers: args.keepers,
+            rosterGrid: args.rosterGrid
+          });
+          try {
+            const preview = await recommendTurn({
+              players: args.players,
+              state: previewState,
+              league,
+              strategy: args.strategy,
+              useAI: args.useAI,
+              previewForTeam: teamOnClock,
+              explain: "top"
+            });
+            console.log(preview.output);
+            args.onOnClockPreview?.({
+              overallPick: projectTurn,
+              teamName: teamOnClock,
+              output: preview.output
+            });
+          } catch (error) {
+            if (error instanceof EngineError && error.kind === "no_candidates") {
+              console.log(
+                `LIKELY PICK FOR ${teamOnClock} — no eligible candidates from the current pool.`
+              );
+            } else {
+              throw error;
+            }
+          }
+        }
+        const projected = await predictNextPicks({
+          players: livePlayers,
+          state,
+          league,
+          strategy: args.strategy,
+          useAI: false,
+          rosterGrid: args.rosterGrid,
+          keepers: args.keepers
+        });
+        console.log(formatProjection(projected));
+        projectedTurns.add(projectTurn);
+        args.onProjection?.(projectTurn);
+        if (args.eventLogPath && projected.projectedPicks.length > 0) {
+          appendEvent(args.eventLogPath, {
+            type: "projection",
+            overallPick: projected.currentOverallPick,
+            horizon: projected.horizon,
+            source: projected.source,
+            picks: projected.projectedPicks.map((pick) => ({
+              playerId: pick.playerId,
+              playerName: pick.playerName,
+              position: pick.position,
+              expectedOverallPick: pick.expectedOverallPick,
+              confidence: pick.confidence
+            })),
+            ...(projected.fallbackReason ? { fallbackReason: projected.fallbackReason } : {})
+          });
+        }
+      }
     }
 
     const current = snapshot.control.currentOverallPick ?? 0;

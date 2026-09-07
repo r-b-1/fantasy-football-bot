@@ -108,6 +108,28 @@ Example need logic for the user's observed lineup:
 
 Need should be dynamic, not a static position multiplier.
 
+### Starter-first shortlist
+
+Roster construction is enforced before the final shortlist is sent to either the
+deterministic picker or AI. Among eligible players, prefer players who fill a
+configured starter opening over bench players. K/DST are still excluded before
+the configured eligibility threshold, so their empty slots do not block earlier
+RB/WR depth or useful QB/TE backups after the core starters are filled.
+
+When no eligible player fills a starter opening, prefer RB/WR depth and at most
+one backup beyond the configured QB/TE starter count. Spare K/DST and further
+QB/TE backups are fallback choices only when no preferred depth is available.
+These are recommendation priorities, not claimed CBS roster limits. If an
+unfilled position has no eligible player, continue ranking the available options
+rather than producing an empty shortlist.
+
+SportsLine ratings, ADP, and scoring weights are unchanged. Score against the full
+eligible pool, then apply roster priority before truncation, preserving the
+existing rating, tier, and scarcity comparisons. A high positional rating is not
+an overall draft rank and does not justify leaving a required starter empty.
+This policy does not infer a final roster size from unknown bench slots or the
+last pick in a partial pick inventory.
+
 ## 7. Scarcity
 
 Two useful measures:

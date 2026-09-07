@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#183e32">
+  <title>Draft Companion | Pickens My Jeanty</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#playerSearch">Skip to player search</a>
+  <header class="masthead">
+    <div class="brand"><span class="brand-mark" aria-hidden="true">DC<span>+</span></span><div><span class="eyebrow">Your draft-night edge</span><h1>Draft Companion</h1></div></div>
+    <div class="league-meta"><span id="leagueName">All in the Family FFBL</span><span id="leagueFormat">16 teams / Keeper draft</span></div>
+    <div class="room-controls">
+      <span class="local-label" id="roomLabel" data-status="disconnected"><span aria-hidden="true"></span><span id="roomLabelText">Manual companion</span></span>
+      <span id="roomDetail" class="room-detail" hidden></span>
+      <div class="room-actions">
+        <button id="watchFixtureBtn" class="secondary-button" type="button">Watch local room</button>
+        <button id="watchLiveBtn" class="secondary-button" type="button">Watch CBS</button>
+        <button id="disconnectRoomBtn" class="text-button" type="button" hidden>Disconnect</button>
+        <span id="liveConfirmation" hidden>Open CBS Chrome to the All in the Family live room? You log in yourself in that window. This never submits a pick. <button id="confirmLive" class="secondary-button" type="button">Yes, open CBS</button><button id="cancelLive" class="text-button" type="button">Cancel</button></span>
+      </div>
+    </div>
+  </header>
+  <main>
+    <section class="clock-strip" aria-label="Draft status">
+      <div class="pick-number"><span class="eyebrow" id="pickEyebrow">Overall pick</span><strong id="currentPick">--</strong><span id="draftClock" class="clock-remaining" hidden></span><span id="draftClockRaw" class="clock-raw" hidden></span></div>
+      <div class="on-clock"><span class="eyebrow" id="turnLabel">On the clock</span><h2 id="clockTeam">Loading draft...</h2><p id="turnContext">Connecting to your local draft room.</p><p id="pickInterval" class="pick-interval" hidden></p></div>
+      <div class="next-turn"><span class="eyebrow">Your next turn</span><strong id="nextPick">--</strong><span id="pickDistance">Checking pick order</span></div>
+    </section>
+    <div class="order-board">
+      <div class="order-heading"><span class="eyebrow" id="draftOrderLabel">Draft order</span><span id="draftOrderNote" class="order-note"></span></div>
+      <div id="draftOrder" class="draft-order" aria-label="Draft order"></div>
+    </div>
+    <div id="upcomingPicks" class="pick-track" aria-label="Upcoming pick order"></div>
+    <div id="roomConflicts" class="notice error" role="status" hidden></div>
+    <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+    <button id="retryBtn" class="text-button" type="button" hidden>Retry connection</button>
+    <div class="workspace">
+      <div class="draft-column">
+        <section class="record-section" aria-labelledby="recordTitle">
+          <div class="section-heading"><div><span class="eyebrow">01 / Keep the board current</span><h2 id="recordTitle">Who just got picked?</h2></div><span class="keyboard-hint"><kbd>/</kbd> to search</span></div>
+          <p class="section-intro">Find the player, select their name, then record the pick.</p>
+          <form id="pickForm" autocomplete="off">
+            <label class="sr-only" for="playerSearch">Search available players</label>
+            <div class="search-wrap" id="searchWrap">
+              <div class="search-field"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="m16 16 5 5"></path></svg><input id="playerSearch" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="playerResults" aria-describedby="searchHelp" placeholder="Start typing a player name..." spellcheck="false" disabled><button id="clearSearch" type="button" aria-label="Clear player search" hidden>&times;</button></div>
+              <div id="searchPopup" class="search-popup" hidden><div class="search-caption" id="searchCaption" role="status">Available players</div><ul id="playerResults" role="listbox" aria-label="Matching players"></ul><p id="noResults" class="empty-search" hidden>No matching available players. Check the spelling or try a last name.</p></div>
+            </div>
+            <div class="search-footer"><span id="searchHelp">Type a name. Use arrow keys to browse and Enter to select.</span><span id="availableCount">-- available</span></div>
+            <div id="selection" class="selection" hidden><div><span class="eyebrow">Selected player</span><strong id="selectedName"></strong><span id="selectedMeta"></span></div><span id="selectedPosition" class="position"></span></div>
+            <div class="record-actions"><span id="recordFor">The team is assigned automatically.</span><button id="submitPick" class="primary-button" type="submit" disabled>Record pick <span aria-hidden="true">&rarr;</span></button></div>
+          </form>
+        </section>
+        <section class="recommend-section" aria-labelledby="recommendTitle">
+          <div class="section-heading"><div><span class="eyebrow">02 / Make your next move</span><h2 id="recommendTitle">Your shortlist</h2></div><div class="source-control"><label for="sourceSelect">Ranking source</label><select id="sourceSelect" disabled><option value="fantasypros">FantasyPros</option><option value="sportsline">SportsLine</option></select></div></div>
+          <p id="recommendContext" class="section-intro">Recommendations for your roster, updated after every recorded pick.</p>
+          <div id="recommendList" aria-busy="true"><p class="empty-state">Building your shortlist...</p></div>
+          <details class="method-note"><summary>How to read these recommendations</summary><p>These are local engine suggestions, not a provider's draft order. The engine combines player data with roster needs, availability, ADP and your strategy. Scores are heuristic, not projected fantasy points.</p><p id="sourceCaveat"></p><p>FantasyPros data attribution: <a href="https://www.fantasypros.com/" target="_blank" rel="noreferrer">FantasyPros.com</a>.</p></details>
+        </section>
+      </div>
+      <aside class="roster-column" aria-label="Your draft overview">
+        <section class="roster-section"><span class="eyebrow">The team you're building</span><h2 id="userTeam">Pickens My Jeanty</h2><div class="roster-summary"><strong id="rosterCount">-- players</strong><span id="starterCount">Checking lineup</span></div><div id="rosterList"></div><p class="small-note">Keepers count toward your lineup needs.</p></section>
+        <details class="keepers-section"><summary><span>League keepers</span><span id="keeperCount" class="count-tag">--</span></summary><p class="small-note">Already rostered and excluded from player search.</p><div id="keepersList"></div></details>
+        <section class="session-note"><span class="eyebrow">A second screen, not autopilot</span><p id="sessionNote">Record what happens in CBS here, or watch a draft room so picks appear automatically. Nothing in this companion submits a pick to your league.</p><p>Session is held in server memory. Restarting the server clears recorded picks.</p></section>
+      </aside>
+    </div>
+    <section class="history-section" aria-labelledby="historyTitle"><div class="section-heading"><div><span class="eyebrow">03 / The story so far</span><h2 id="historyTitle">Draft log <span id="historyCount" class="heading-count">0</span></h2></div><button id="undoBtn" class="secondary-button" type="button" disabled>Undo last pick</button></div><div id="historyList"><p class="empty-state">A clean board. Record the first pick above to start your draft log.</p></div></section>
+    <footer class="page-footer"><span>Built for your league. One pick at a time.</span><div><button id="resetBtn" class="text-button" type="button" disabled>Reset draft</button><span id="resetConfirmation" hidden>Clear all recorded picks? <button id="confirmReset" class="danger-button" type="button">Yes, reset</button><button id="cancelReset" class="text-button" type="button">Cancel</button></span></div></footer>
+  </main>
+</body>
+</html>

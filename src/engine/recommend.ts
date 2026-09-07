@@ -13,6 +13,8 @@ export interface RecommendTurnInput {
   useAI?: boolean;
   eventLogPath?: string;
   explain?: "all" | "top" | "none";
+  /** When set, this is a banner preview for another team — do not log as our pick. */
+  previewForTeam?: string;
 }
 
 export interface RecommendTurnResult {
@@ -47,7 +49,7 @@ export async function recommendTurn(input: RecommendTurnInput): Promise<Recommen
   const selected =
     ranked.find((candidate) => candidate.player.id === decision.selectedCandidateId) ?? ranked[0]!;
 
-  if (input.eventLogPath) {
+  if (input.eventLogPath && !input.previewForTeam) {
     appendEvent(input.eventLogPath, {
       type: "shortlist",
       overallPick: input.state.currentOverallPick,
@@ -78,7 +80,8 @@ export async function recommendTurn(input: RecommendTurnInput): Promise<Recommen
     ranked,
     decision,
     output: formatRecommendation(ranked, input.state, input.league, decision, {
-      explain: input.explain ?? "top"
+      explain: input.explain ?? "top",
+      previewForTeam: input.previewForTeam
     })
   };
 }

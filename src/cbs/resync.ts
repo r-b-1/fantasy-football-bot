@@ -1,6 +1,13 @@
 import type { DraftPickEvent, SportslinePlayer } from "../domain/types.js";
+import { listedPositionFromCbsName, sportslineNameFromCbsListing } from "../data/normalize.js";
 import { resolvePlayer } from "../engine/identity.js";
 import type { LiveDraftResult } from "./types.js";
+
+function resolveLiveResult(players: SportslinePlayer[], live: LiveDraftResult) {
+  const name = sportslineNameFromCbsListing(live.playerName);
+  const position = live.position ?? listedPositionFromCbsName(live.playerName);
+  return resolvePlayer(players, name, position);
+}
 
 export interface ResyncResult {
   events: DraftPickEvent[];
@@ -25,10 +32,10 @@ export function resyncFromDraftResults(
     const local = localByPick.get(overallPick);
 
     if (live && !local) {
-      const resolved = resolvePlayer(players, live.playerName, live.position);
+      const resolved = resolveLiveResult(players, live);
       if (!resolved.ok) {
         conflicts.push(
-          `CBS pick ${overallPick} (${live.fantasyTeam} / ${live.playerName}) could not be matched unambiguously; leaving it for operator review.`
+          `CBS pick ${overallPick} (${live.fantasyTeam} / ${live.playerName}) could not be matched; leaving it for operator review.`
         );
         continue;
       }
@@ -53,7 +60,7 @@ export function resyncFromDraftResults(
     }
 
     if (live && local) {
-      const resolved = resolvePlayer(players, live.playerName, live.position);
+      const resolved = resolveLiveResult(players, live);
       if (!resolved.ok) {
         conflicts.push(
           `CBS pick ${overallPick} identity is ambiguous (${resolved.error.message}). Keeping local event pending review.`

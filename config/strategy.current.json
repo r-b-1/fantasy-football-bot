@@ -14,9 +14,11 @@
   },
   "earlyRoundPositionPenalties": {
     "K": 35,
-    "DST": 35
+    "DST": 35,
+    "QB": 25
   },
   "kDstEligibleAfterOverallPick": 130,
+  "qbBackupEligibleAfterOverallPick": 80,
   "byeOverlapPenalty": 6,
   "vorWeight": 0,
   "recentPickWindow": 8,

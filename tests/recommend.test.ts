@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { loadLeagueConfig, loadStrategyConfig } from "../src/config/load.js";
 import { loadSportslineWorkbook } from "../src/data/sportsline.js";
 import { recommendTurn, shouldRecommendForTurn } from "../src/engine/recommend.js";
+import { shouldProjectForTurn } from "../src/engine/predict.js";
 import { eligiblePlayers } from "../src/engine/shortlist.js";
 import {
   applyLiveTurnIdentity,
@@ -54,6 +55,18 @@ describe("live turn identity lock", () => {
     expect(next.knownOverallPicks.slice(0, 4)).toEqual([3, 22, 27, 46]);
     expect(next.knownOverallPicks).toHaveLength(estimatedDraftRounds(next));
   });
+
+  it("locks 12-team slot 2 from overall pick 2, not from the round number", () => {
+    const league = loadLeagueConfig("config/league.mock.confirm.json");
+    const next = applyLiveTurnIdentity(league, {
+      youAreUp: true,
+      teamOnClock: "pickens fan",
+      currentOverallPick: 2
+    });
+    expect(next.userTeamName).toBe("pickens fan");
+    expect(next.draftSlot).toBe(2);
+    expect(next.knownOverallPicks.slice(0, 4)).toEqual([2, 23, 26, 47]);
+  });
 });
 
 describe("recommend turn", () => {
@@ -63,6 +76,15 @@ describe("recommend turn", () => {
     expect(shouldRecommendForTurn(true, 21, seen)).toBe(21);
     expect(shouldRecommendForTurn(false, 21, seen)).toBeNull();
     expect(shouldRecommendForTurn(true, null, seen)).toBeNull();
+  });
+
+  it("projects once per non-user overall pick and skips the user turn", () => {
+    const seen = new Set<number>([2]);
+    expect(shouldProjectForTurn(true, false, 2, seen)).toBeNull();
+    expect(shouldProjectForTurn(true, false, 4, seen)).toBe(4);
+    expect(shouldProjectForTurn(true, true, 3, seen)).toBeNull();
+    expect(shouldProjectForTurn(false, false, 4, seen)).toBeNull();
+    expect(shouldProjectForTurn(true, false, null, seen)).toBeNull();
   });
 
   it("keeps Jeanty available in a public mock and returns a deterministic shortlist", async () => {

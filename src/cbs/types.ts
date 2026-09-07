@@ -13,7 +13,12 @@ export interface LiveDraftControl {
   teamOnClock: string | null;
   isUserTurn: boolean;
   youAreUp: boolean;
+  waitingToStart: boolean;
   clockSecondsRemaining: number | null;
+  clockRaw: string | null;
+  secondsPerPick: number | null;
+  pickClockRaw: string | null;
+  draftOrder: string[];
 }
 
 export interface LiveLeagueFacts {

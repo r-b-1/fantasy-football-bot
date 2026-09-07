@@ -7,7 +7,7 @@ import {
   scoreCandidates
 } from "../src/engine/scoring.js";
 import { generateShortlist } from "../src/engine/shortlist.js";
-import type { DraftState, LeagueConfig, LivePlayer, StrategyConfig } from "../src/domain/types.js";
+import type { DraftState, LeagueConfig, LivePlayer, Position, StrategyConfig } from "../src/domain/types.js";
 
 const league = loadLeagueConfig("config/league.current.json");
 const strategy = loadStrategyConfig("config/strategy.current.json");
@@ -41,6 +41,13 @@ function state(overrides: Partial<DraftState> = {}): DraftState {
   };
 }
 
+function roster(...positions: Position[]): DraftState["roster"] {
+  return { players: positions.map((position, index) => ({
+    playerId: `rostered-${index}`, name: `Rostered ${index}`, position,
+    byeWeek: null, source: "draft"
+  })) };
+}
+
 describe("draft scoring helpers", () => {
   it("rewards a player who falls below ADP", () => {
     expect(computeAdpValue(60, 30)).toBeGreaterThan(computeAdpValue(30, 30));
@@ -50,8 +57,14 @@ describe("draft scoring helpers", () => {
     expect(computeAdpValue(20, 60)).toBeLessThan(50);
   });
 
-  it("treats missing ADP as market-neutral", () => {
-    expect(computeAdpValue(21, null)).toBe(50);
+  it("treats missing ADP as market-neutral for skill positions", () => {
+    expect(computeAdpValue(21, null, "RB")).toBe(50);
+  });
+
+  it("penalizes missing ADP for backup-tier positions", () => {
+    expect(computeAdpValue(21, null, "QB")).toBeLessThan(50);
+    expect(computeAdpValue(21, null, "K")).toBeLessThan(50);
+    expect(computeAdpValue(21, null, "DST")).toBeLessThan(50);
   });
 
   it("recognizes greater wait risk when next pick is far later", () => {
@@ -194,6 +207,95 @@ describe("shortlist scoring", () => {
     expect(shortlist[0]!.player.id).toBe(elite.id);
     expect(shortlist[0]!.components.penalties).toBeGreaterThan(0);
     expect(shortlist[0]!.components.penalties).toBeLessThanOrEqual(8);
+  });
+});
+
+describe("starter-first shortlist", () => {
+  it.each(["QB", "TE", "WR"] as const)("fills RB2 before a higher-rated %s backup", (position) => {
+    const backup = player({ id: "backup", name: "Backup", position, sportslineRating: 100, adp: 1 });
+    const rb = player({ id: "rb", name: "Starter RB", position: "RB", sportslineRating: 45, adp: 90 });
+    const current = state({
+      roster: roster("QB", "RB", "WR", "WR", "WR", "TE"),
+      availablePlayerIds: new Set([backup.id, rb.id])
+    });
+    const ranked = generateShortlist([backup, rb], current, league, strategy);
+    expect(ranked.map((candidate) => candidate.player.id)).toEqual([rb.id]);
+    expect(ranked[0]!.notes.join(" ")).toMatch(/starter.*before.*depth/i);
+  });
+
+  it("keeps SportsLine scoring intact among players who fill starter openings", () => {
+    const higher = player({ id: "higher", name: "Higher SportsLine", position: "RB", sportslineRating: 80, adp: 60 });
+    const lower = player({ id: "lower", name: "Lower SportsLine", position: "RB", sportslineRating: 45, adp: 50 });
+    const current = state({ roster: roster("RB"), availablePlayerIds: new Set([higher.id, lower.id]) });
+    const ranked = generateShortlist([lower, higher], current, league, strategy);
+    const scored = scoreCandidates([lower, higher], current, league, strategy);
+    expect(ranked[0]!.player.id).toBe(higher.id);
+    expect(ranked.map(({ player, score, components }) => ({ id: player.id, score, components })))
+      .toEqual(scored.map(({ player, score, components }) => ({ id: player.id, score, components })));
+  });
+
+  it("uses configured starter counts rather than assuming every league starts one QB", () => {
+    const qb = player({ id: "qb", name: "Second Starting QB", position: "QB" });
+    const wr = player({ id: "wr", name: "Backup WR", position: "WR", sportslineRating: 100 });
+    const current = state({
+      roster: roster("QB", "RB", "RB", "WR", "WR", "WR", "TE"),
+      availablePlayerIds: new Set([qb.id, wr.id])
+    });
+    const twoQbLeague = { ...league, lineup: { ...league.lineup, QB: 2 } };
+    expect(generateShortlist([qb, wr], current, twoQbLeague, strategy).map((candidate) => candidate.player.id)).toEqual([qb.id]);
+  });
+
+  it("allows valuable first QB/TE backups after core starters fill, even with K/DST deferred", () => {
+    const pool = [
+      player({ id: "qb", name: "Backup QB", position: "QB", sportslineRating: 100 }),
+      player({ id: "te", name: "Backup TE", position: "TE", sportslineRating: 95 }),
+      player({ id: "rb", name: "Depth RB", position: "RB", sportslineRating: 20 }),
+      player({ id: "k", name: "Kicker", position: "K", sportslineRating: 100 })
+    ];
+    const current = state({
+      currentOverallPick: 99,
+      roster: roster("QB", "RB", "RB", "WR", "WR", "WR", "TE"),
+      availablePlayerIds: new Set(pool.map((player) => player.id))
+    });
+    const ranked = generateShortlist(pool, current, league, strategy);
+    expect(ranked.map((candidate) => candidate.player.id)).toEqual(expect.arrayContaining(["qb", "te", "rb"]));
+    expect(ranked.some((candidate) => candidate.player.position === "K")).toBe(false);
+    expect(ranked[0]!.player.id).toBe("qb");
+  });
+
+  it("prefers RB/WR depth to third QBs/TEs and spare kickers/defenses", () => {
+    const pool = (["QB", "TE", "K", "DST", "RB", "WR"] as const).map((position) => player({
+      id: position, name: position, position, sportslineRating: position === "RB" || position === "WR" ? 30 : 100
+    }));
+    const current = state({
+      currentOverallPick: 158,
+      roster: roster("QB", "QB", "RB", "RB", "WR", "WR", "WR", "TE", "TE", "K", "DST"),
+      availablePlayerIds: new Set(pool.map((player) => player.id))
+    });
+    expect(generateShortlist(pool, current, league, strategy).map((candidate) => candidate.player.position).sort())
+      .toEqual(["RB", "WR"]);
+  });
+
+  it("fills K/DST starters once eligible instead of selecting more bench players", () => {
+    const pool = [
+      player({ id: "wr", name: "Depth WR", position: "WR", sportslineRating: 100 }),
+      player({ id: "k", name: "Kicker", position: "K", sportslineRating: 40 }),
+      player({ id: "dst", name: "Defense", position: "DST", sportslineRating: 40 })
+    ];
+    const current = state({
+      currentOverallPick: strategy.kDstEligibleAfterOverallPick,
+      roster: roster("QB", "RB", "RB", "WR", "WR", "WR", "TE"),
+      availablePlayerIds: new Set(pool.map((player) => player.id))
+    });
+    expect(generateShortlist(pool, current, league, strategy).map((candidate) => candidate.player.position).sort())
+      .toEqual(["DST", "K"]);
+  });
+
+  it("does not deadlock when no missing starter position has an eligible player", () => {
+    const qb = player({ id: "qb", name: "Backup QB", position: "QB" });
+    const rb = player({ id: "rb", name: "Taken RB", position: "RB", available: false });
+    const current = state({ roster: roster("QB"), availablePlayerIds: new Set([qb.id]) });
+    expect(generateShortlist([qb, rb], current, league, strategy)[0]!.player.id).toBe(qb.id);
   });
 });
 

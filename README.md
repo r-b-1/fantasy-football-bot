@@ -165,6 +165,16 @@ npm run cbs:mock
 
 That opens `https://mockdraft.football.cbssports.com/`. Log in if needed, join a **12-team PPR Standard** mock yourself, then press Enter in the terminal when the draft room is open. When you are on the clock, the engine shortlist and (if `OPENAI_API_KEY` is set) the model choice print. Use `--no-ai` to skip the model. Do not open the All in the Family room with this command.
 
+Confirm-mode mock practice (public mock only; All in the Family stays recommend-only):
+
+```bash
+npm run cbs:mock-confirm
+```
+
+You still click Join. The command waits for the mock room, overlays team count and PPR vs Standard from visible text, recommends when you are up, and only after you press Enter it clicks Draft once and verifies the result. Search/draft locators must be captured from that room while YOU ARE UP (`npm run cbs:diagnose-mock`) and saved to `config/selectors.local.json`. Do not guess those locators. The SportsLine sheet remains CBS PPR 12-team even if the mock is 10-team or non-PPR.
+
+Mock diagnose uses a separate Chrome profile (`.local/cbs-mock-browser-profile`) so companion can keep the live room open. It opens the last mock room URL from `.local/mock-start-url.txt` when that file exists. Join or wait in the Chrome window this command opens, not in your own browser. The command waits until **YOU ARE UP** before dumping search/Draft locators.
+
 League-room recommend mode (still no clicks):
 
 ```bash
@@ -172,6 +182,27 @@ npm run cbs:recommend
 ```
 
 Do not put a CBS password in `.env`. The only optional secret is an OpenAI API key.
+
+## Manual Draft Companion
+
+Run a local second-screen companion beside your CBS draft room:
+
+```bash
+npm run companion
+```
+
+Open **http://localhost:4000/**. Use `COMPANION_PORT` to choose another port.
+
+- Start typing a player's first or last name. Arrow keys browse matches; Enter selects, then **Record pick** confirms. Press `/` to focus search.
+- The team on the clock is inferred from the configured snake order and pick assignments unless a draft room is attached. Recording here never submits a pick to CBS.
+- **Watch local room** opens the fake 16-team draft room and mirrors its picks into this UI. **Watch CBS** opens your persistent Chrome profile to the configured live room (`/draft/live/room2`). Log in in that Chrome window if needed. Both paths are read-only. The companion cannot see a draft room you opened in a different browser.
+- While a room is attached, local record/undo/reset are locked. **Disconnect** keeps the last synced board so you can finish the draft by hand.
+- Your shortlist, roster needs, upcoming picks, and draft log update after each recorded or room-synced pick. Use **Why this player?** to inspect scoring details.
+- **League keepers** shows the full list. The configured `rosterGridPath` loads all 32 keepers by default; `COMPANION_ROSTERGRID_CSV` optionally overrides that path. The grid is authoritative, including Kenneth Walker III on F.A.F.O., and invalid keeper data is reported rather than silently ignored.
+- Switch between SportsLine and experimental FantasyPros mode without losing recorded picks. FantasyPros mode currently uses synthetic ECR-derived ratings plus SportsLine ADP, not pure ECR order; its CSV scoring format is unverified.
+- **Undo last pick** corrects an entry. **Reset draft** requires confirmation and preserves keeper initialization.
+
+Auto-attach the local room with `npm run companion:room` or `COMPANION_ROOM=fixture`. Use `COMPANION_ROOM=live` only when you intend to open CBS Chrome from this process. Session state lives in server memory: browser refreshes retain picks, but restarting the server clears them. Optional Google Fonts enhance the appearance; local fallback fonts keep the UI usable offline.
 
 ## Tests
 

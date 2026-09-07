@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { POSITIONS, type DraftState, type LeagueConfig, type LivePlayer, type NextPicksProjection, type Position, type ProjectedPick, type StrategyConfig } from "../domain/types.js";
 import { deterministicProjection, projectionHorizonFromStrategy } from "../engine/predict.js";
+import type { RosterGrid } from "../data/rosterGrid.js";
+import { computeTeamNeeds, weightedNextPickByTeam } from "../engine/teamNeed.js";
 import { OPENROUTER_DEFAULT_BASE_URL } from "./openrouter.js";
 import { stripMarkdownFences } from "./parse.js";
 
@@ -114,6 +116,8 @@ export interface PredictArgs {
   horizon?: number;
   timeoutMs?: number;
   aiModelName?: string;
+  rosterGrid?: RosterGrid;
+  keepers?: Array<{ fantasyTeam: string; playerName: string; position: Position }>;
 }
 
 const SYSTEM_PROMPT = [
@@ -136,7 +140,9 @@ const SYSTEM_PROMPT = [
 export async function predictNextPicks(args: PredictArgs): Promise<ProjectionResult> {
   const horizon = args.horizon ?? projectionHorizonFromStrategy(args.strategy);
   const fallback = deterministicProjection(args.players, args.state, args.league, args.strategy, {
-    horizon
+    horizon,
+    rosterGrid: args.rosterGrid,
+    keepers: args.keepers
   });
   const started = Date.now();
   const withMeta = (projection: NextPicksProjection, source: ProjectionResult["source"], reason?: string): ProjectionResult => ({
@@ -156,7 +162,7 @@ export async function predictNextPicks(args: PredictArgs): Promise<ProjectionRes
     return withMeta(fallback, "deterministic", wantAI ? "OPENROUTER_API_KEY missing" : "AI disabled");
   }
 
-  const payload = buildProjectionPayload(args.players, args.state, args.league, horizon);
+  const payload = buildProjectionPayload(args.players, args.state, args.league, horizon, args.rosterGrid, args.keepers);
   const allowedIds = new Set(
     args.players
       .filter((player) => player.available && args.state.availablePlayerIds.has(player.id))
@@ -208,7 +214,9 @@ function buildProjectionPayload(
   players: LivePlayer[],
   state: DraftState,
   league: LeagueConfig,
-  horizon: number
+  horizon: number,
+  rosterGrid?: RosterGrid,
+  keepers?: Array<{ fantasyTeam: string; playerName: string; position: Position }>
 ): Record<string, unknown> {
   const available = players
     .filter((player) => player.available && state.availablePlayerIds.has(player.id))
@@ -235,7 +243,7 @@ function buildProjectionPayload(
     rosterByPosition[position].push(player.name);
   }
 
-  return {
+  const payload: Record<string, unknown> = {
     currentOverallPick: state.currentOverallPick,
     nextUserPick: state.nextUserOverallPick,
     teamOnClock: state.teamOnClock,
@@ -248,6 +256,40 @@ function buildProjectionPayload(
     teamCount: league.teamCount,
     scoringFormat: league.scoringFormat
   };
+
+  if (rosterGrid) {
+    const nextPicksByTeam = weightedNextPickByTeam({
+      league,
+      currentOverallPick: state.currentOverallPick,
+      userTeamName: league.userTeamName,
+      knownUserOverallPicks: league.knownOverallPicks
+    });
+    const teamNeeds = computeTeamNeeds({
+      rosterGrid,
+      drafted: state.draftEvents.map((event) => ({
+        fantasyTeam: event.fantasyTeam,
+        playerName: event.playerName,
+        position: event.position
+      })),
+      nextPicksByTeam,
+      league,
+      keepers: (keepers ?? []).map((k) => ({
+        fantasyTeam: k.fantasyTeam,
+        playerName: k.playerName,
+        position: k.position
+      }))
+    });
+    payload.teamNeeds = teamNeeds.map((need) => ({
+      teamName: need.teamName,
+      nextOverallPick: need.nextOverallPick,
+      startingNeed: need.startingNeed,
+      totalGap: need.totalGap
+    }));
+    payload.teamNeedGuidance =
+      "For each upcoming non-user pick, prefer a player whose position fills a team's startingNeed gap. Team with the smallest gap is most likely to take a non-need pick (BPA).";
+  }
+
+  return payload;
 }
 
 interface ProjectionValidationOk {

@@ -1,6 +1,9 @@
 import { loadLeagueConfig, loadStrategyConfig } from "../config/load.js";
+import { loadRosterGrid } from "../data/rosterGrid.js";
+import { resolveProjectionKeepers } from "../data/leagueKeepers.js";
 import { loadSportslineWorkbook } from "../data/sportsline.js";
 import { predictNextPicks } from "../ai/predict.js";
+import { shouldProjectForTurn } from "../engine/predict.js";
 import { formatProjection } from "../cli/format.js";
 import type { LivePlayer } from "../domain/types.js";
 import { toLivePlayers } from "../engine/state.js";
@@ -25,6 +28,8 @@ export async function runCbsMonitor(): Promise<void> {
     process.env.SPORTSLINE_XLSX ?? "data/reference/cheatsheet_cbsppr12.xlsx"
   );
   const players: LivePlayer[] = toLivePlayers(sportslinePlayers, new Set());
+  const rosterGrid = league.rosterGridPath ? loadRosterGrid(league.rosterGridPath) : undefined;
+  const keepers = resolveProjectionKeepers(league);
   const useAI = !process.argv.includes("--no-ai");
   const showProjection = !process.argv.includes("--no-projection");
 
@@ -59,6 +64,7 @@ export async function runCbsMonitor(): Promise<void> {
     }
     const reader = new CBSReader(focused.page, selectors, league);
     const seenPicks = new Set<number>();
+    const projectedTurns = new Set<number>();
     console.log("Monitor mode: no clicks will be performed. Ctrl+C to stop.");
 
     for (;;) {
@@ -93,7 +99,13 @@ export async function runCbsMonitor(): Promise<void> {
         }
       }
 
-      if (showProjection && !snapshot.control.isUserTurn) {
+      const projectTurn = shouldProjectForTurn(
+        showProjection,
+        snapshot.control.isUserTurn,
+        snapshot.control.currentOverallPick,
+        projectedTurns
+      );
+      if (projectTurn != null) {
         const draftState = await reader.readDraftState(players, {
           recentPickWindow: strategy.recentPickWindow
         });
@@ -102,9 +114,12 @@ export async function runCbsMonitor(): Promise<void> {
           state: draftState,
           league,
           strategy,
-          useAI
+          useAI,
+          rosterGrid,
+          keepers
         });
         console.log(formatProjection(projected));
+        projectedTurns.add(projectTurn);
         if (eventLogPath && projected.projectedPicks.length > 0) {
           appendEvent(eventLogPath, {
             type: "projection",

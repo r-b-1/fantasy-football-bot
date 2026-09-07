@@ -44,12 +44,19 @@ const DEFAULT_SELECTOR_PATHS = [
   "config/selectors.example.json"
 ];
 
+export function isMockSelectorConfig(config: SelectorConfig): boolean {
+  return config.draftRoomUrlPattern.toLowerCase().includes("mockdraft");
+}
+
 export function resolveSelectorConfigPath(): string {
   const candidates = [process.env.SELECTOR_CONFIG, ...DEFAULT_SELECTOR_PATHS].filter(
     (path): path is string => Boolean(path && path.trim())
   );
   for (const path of candidates) {
-    if (fs.existsSync(path)) return path;
+    if (!fs.existsSync(path)) continue;
+    const config = loadSelectorConfig(path);
+    if (isMockSelectorConfig(config)) continue;
+    return path;
   }
   throw new Error(
     "No CBS selector config found. Expected config/selectors.live.json in the repo."
@@ -90,6 +97,35 @@ export const REQUIRED_READ_SELECTOR_FIELDS = [
 
 export function requiredReadSelectors(config: SelectorConfig): string[] {
   return REQUIRED_READ_SELECTOR_FIELDS.filter((field) => !config.selectors[field]);
+}
+
+/** Captured from mock diagnose dumps. Empty until a player name is clicked. */
+export const CBS_PLAYER_POPUP_SELECTOR = '[id="DraftRoom.views.PlayerPopup"]';
+
+export const REQUIRED_CLICK_SELECTOR_FIELDS = ["draftAction"] as const;
+
+export function requiredClickSelectors(config: SelectorConfig): string[] {
+  const missing: string[] = REQUIRED_CLICK_SELECTOR_FIELDS.filter((field) => !config.selectors[field]);
+  if (!config.selectors.playerSearchInput && !config.selectors.playerRows) {
+    missing.push("playerSearchInput");
+  }
+  return missing;
+}
+
+export function resolveMockSelectorConfigPath(): string {
+  const candidates = [
+    process.env.SELECTOR_CONFIG,
+    "config/selectors.local.json",
+    "config/selectors.mock.json"
+  ].filter((path): path is string => Boolean(path && path.trim()));
+
+  for (const path of candidates) {
+    if (!fs.existsSync(path)) continue;
+    const config = loadSelectorConfig(path);
+    if (config.draftRoomUrlPattern.includes("mockdraft")) return path;
+  }
+
+  throw new Error("No mock CBS selector config found. Expected config/selectors.mock.json.");
 }
 
 export function allSelectorFields(config: SelectorConfig): Array<[string, string | null]> {

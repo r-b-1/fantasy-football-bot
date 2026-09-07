@@ -16,7 +16,26 @@ describe("config validation", () => {
     expect(league.keepers.map((k) => k.name)).toEqual(["Ashton Jeanty", "George Pickens"]);
     expect(league.completedTrades).toHaveLength(1);
     expect(league.inferUserTeamFromYouAreUp).toBe(false);
+    expect(league.leaguePicksArePartial).toBe(true);
+    expect(league.draftOrder).toHaveLength(16);
+    expect(league.draftOrder?.[2]).toBe("Pickens My Jeanty");
+    expect(league.leaguePicks.some((entry) => entry.picks.includes(21))).toBe(true);
+    expect(league.leaguePicks.some((entry) => entry.picks.includes(62))).toBe(true);
+    expect(league.leagueKeepersPath).toBe("config/league-keepers.json");
     expect(strategy.candidateShortlistSize).toBe(7);
+  });
+
+  it("loads the public mock confirm league without keepers and with clicking gated to mocks", () => {
+    const mock = loadLeagueConfig("config/league.mock.confirm.json");
+    expect(mock.teamCount).toBe(12);
+    expect(mock.keepers).toEqual([]);
+    expect(mock.keeperSlots).toBe(0);
+    expect(mock.cbsExecutionEnabled).toBe(true);
+    expect(mock.executionMode).toBe("confirm");
+    expect(mock.inferUserTeamFromYouAreUp).toBe(true);
+    const live = loadLeagueConfig("config/league.current.json");
+    expect(live.executionMode).toBe("recommend");
+    expect(live.cbsExecutionEnabled).toBe(false);
   });
 
   it("loads the public mock-draft league without keepers or live clicking", () => {
@@ -38,6 +57,20 @@ describe("config validation", () => {
     valid.weights.sportslineRating = 0.99;
     fs.writeFileSync(file, JSON.stringify(valid));
     expect(() => loadStrategyConfig(file)).toThrow(EngineError);
+  });
+
+  it("rejects duplicate overall picks assigned to two teams", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "league-"));
+    const file = path.join(dir, "league.json");
+    const valid = JSON.parse(fs.readFileSync("config/league.current.json", "utf8")) as {
+      leaguePicks: Array<{ teamName: string; picks: number[] }>;
+    };
+    valid.leaguePicks = [
+      { teamName: "Pickens My Jeanty", picks: [3, 21] },
+      { teamName: "Now we're Cookin'", picks: [21, 62] }
+    ];
+    fs.writeFileSync(file, JSON.stringify(valid));
+    expect(() => loadLeagueConfig(file)).toThrow(EngineError);
   });
 
   it("rejects an invalid execution mode", () => {

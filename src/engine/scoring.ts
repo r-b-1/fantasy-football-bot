@@ -24,8 +24,11 @@ function median(values: number[]): number {
   return sorted[mid]!;
 }
 
-export function computeAdpValue(currentPick: number, adp: number | null): number {
-  if (adp === null) return 50;
+export function computeAdpValue(currentPick: number, adp: number | null, position?: Position): number {
+  if (adp === null) {
+    if (position === "K" || position === "DST" || position === "QB") return 25;
+    return 50;
+  }
   const delta = currentPick - adp;
   return clamp(50 + 50 * Math.tanh(delta / 24));
 }
@@ -155,6 +158,7 @@ function earlyPositionPenalty(
   strategy: StrategyConfig
 ): number {
   if (state.currentOverallPick >= strategy.kDstEligibleAfterOverallPick) return 0;
+  if (player.position === "QB" && state.currentOverallPick >= (strategy.qbBackupEligibleAfterOverallPick ?? 80)) return 0;
   return strategy.earlyRoundPositionPenalties[player.position] ?? 0;
 }
 
@@ -178,7 +182,7 @@ export function scoreCandidates(
     .map((player): CandidateScore => {
       const components: CandidateComponentScores = {
         sportslineRating: clamp(player.sportslineRating),
-        adpValue: computeAdpValue(state.currentOverallPick, player.adp),
+        adpValue: computeAdpValue(state.currentOverallPick, player.adp, player.position),
         rosterNeed: computeRosterNeed(player.position, state, league, strategy),
         scarcity: computeScarcity(player, pool, state, league),
         nextPickRisk: computeNextPickRisk(

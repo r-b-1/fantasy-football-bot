@@ -38,6 +38,65 @@ export function loadLeagueConfig(path: string): LeagueConfig {
       { path }
     );
   }
+  if (cfg.draftOrder) {
+    if (cfg.draftOrder.length !== cfg.teamCount) {
+      throw new EngineError(
+        "invalid_config",
+        `draftOrder length (${cfg.draftOrder.length}) must equal teamCount (${cfg.teamCount})`,
+        { path }
+      );
+    }
+    const seenSlots = new Set<string>();
+    for (const name of cfg.draftOrder) {
+      const key = name.trim().toLowerCase();
+      if (seenSlots.has(key)) {
+        throw new EngineError("invalid_config", `draftOrder has duplicate team "${name}"`, { path });
+      }
+      seenSlots.add(key);
+    }
+  }
+  const claimedPicks = new Map<number, string>();
+  const seenTeams = new Set<string>();
+  for (const entry of cfg.leaguePicks) {
+    const teamKey = entry.teamName.trim().toLowerCase();
+    if (seenTeams.has(teamKey)) {
+      throw new EngineError(
+        "invalid_config",
+        `leaguePicks has duplicate team "${entry.teamName}"`,
+        { path }
+      );
+    }
+    seenTeams.add(teamKey);
+    const inTeam = new Set<number>();
+    for (const pick of entry.picks) {
+      if (inTeam.has(pick)) {
+        throw new EngineError(
+          "invalid_config",
+          `leaguePicks for "${entry.teamName}" repeats overall pick ${pick}`,
+          { path }
+        );
+      }
+      inTeam.add(pick);
+      const previous = claimedPicks.get(pick);
+      if (previous) {
+        throw new EngineError(
+          "invalid_config",
+          `Overall pick ${pick} is assigned to both "${previous}" and "${entry.teamName}"`,
+          { path }
+        );
+      }
+      claimedPicks.set(pick, entry.teamName);
+    }
+  }
+  if (!cfg.leaguePicksArePartial) {
+    if (cfg.leaguePicks.length !== cfg.teamCount) {
+      throw new EngineError(
+        "invalid_config",
+        `leaguePicksArePartial=false requires an entry for every team; got ${cfg.leaguePicks.length} of ${cfg.teamCount}`,
+        { path }
+      );
+    }
+  }
   return cfg;
 }
 

@@ -4,7 +4,9 @@ import { renderReplayDemo } from "./cli/replayDemo.js";
 import { runCbsDiagnose } from "./cbs/diagnose.js";
 import { runFixtureConfirm } from "./cbs/fixtureConfirm.js";
 import { runFixtureMonitor } from "./cbs/fixtureMonitor.js";
+import { runFixtureProjection } from "./cbs/fixtureProjection.js";
 import { runCbsMonitor } from "./cbs/monitor.js";
+import { runCbsMockConfirm } from "./cbs/mockConfirm.js";
 import { runCbsMockDraft, runCbsRecommend } from "./cbs/recommend.js";
 import { loadLeagueConfig, loadStrategyConfig } from "./config/load.js";
 import { loadSportslineWorkbook } from "./data/sportsline.js";
@@ -12,6 +14,9 @@ import type { DraftState, LivePlayer } from "./domain/types.js";
 import { generateShortlist } from "./engine/shortlist.js";
 import { nextUserOverallPick } from "./engine/state.js";
 import { formatShortlist } from "./cli/format.js";
+import { previewFantasyPros } from "./cli/fantasyPros.js";
+import { previewFantasyProsRankings } from "./cli/fantasyProsRankings.js";
+import { startCompanionServer } from "./companion/server.js";
 
 const leaguePath = process.env.LEAGUE_CONFIG ?? "config/league.current.json";
 const strategyPath = process.env.STRATEGY_CONFIG ?? "config/strategy.current.json";
@@ -75,6 +80,14 @@ function rankDemo(): void {
 
 async function main(): Promise<void> {
   const command = process.argv[2] ?? "rank-demo";
+  if (command === "fantasypros-preview") {
+    await previewFantasyPros(process.argv.slice(3));
+    return;
+  }
+  if (command === "fantasypros-rankings") {
+    previewFantasyProsRankings(process.argv.slice(3));
+    return;
+  }
   if (command === "rank-demo") {
     rankDemo();
     return;
@@ -161,8 +174,17 @@ async function main(): Promise<void> {
     });
     return;
   }
-  if (command === "cbs-diagnose") {
-    await runCbsDiagnose({ mock: process.argv.includes("--mock") });
+  if (command === "cbs-fixture-projection") {
+    await runFixtureProjection({
+      headless: process.argv.includes("--headless"),
+      useAI: !process.argv.includes("--no-ai"),
+      pauseOnUser: !process.argv.includes("--no-pause-on-user") ? undefined : false,
+      untilPick: Number(process.env.FIXTURE_UNTIL_PICK ?? "0")
+    });
+    return;
+  }
+  if (command === "cbs-diagnose" || command === "cbs-diagnose-mock") {
+    await runCbsDiagnose({ mock: command === "cbs-diagnose-mock" || process.argv.includes("--mock") });
     return;
   }
   if (command === "cbs-monitor") {
@@ -175,6 +197,15 @@ async function main(): Promise<void> {
   }
   if (command === "cbs-mock") {
     await runCbsMockDraft({ useAI: !process.argv.includes("--no-ai") });
+    return;
+  }
+  if (command === "cbs-mock-confirm") {
+    await runCbsMockConfirm({ useAI: !process.argv.includes("--no-ai") });
+    return;
+  }
+  if (command === "companion") {
+    const port = Number(process.env.COMPANION_PORT ?? "4000");
+    await startCompanionServer(port);
     return;
   }
   throw new Error(`Unknown command: ${command}`);

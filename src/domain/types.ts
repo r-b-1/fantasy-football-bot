@@ -46,6 +46,11 @@ export interface CompletedTrade {
   receivedOverallPicks: number[];
 }
 
+export interface LeaguePickAssignment {
+  teamName: string;
+  picks: number[];
+}
+
 export interface LeagueConfig {
   platform: "CBS";
   season: number;
@@ -62,13 +67,22 @@ export interface LeagueConfig {
   completedTrades: CompletedTrade[];
   knownOverallPicks: number[];
   knownPicksArePartial: boolean;
+  /** Team names in draft-slot order (index 0 = slot 1). */
+  draftOrder?: string[];
+  /** Per-team overall pick lists. Overlay on snake math so traded picks change owners. */
+  leaguePicks: LeaguePickAssignment[];
+  leaguePicksArePartial: boolean;
+  /** Path to JSON/CSV of all teams' keepers for live projection. */
+  leagueKeepersPath?: string;
   lineup: Record<Position, number>;
   benchSlots: number | null;
   rosterMaximums: Partial<Record<Position, number>>;
   executionMode: ExecutionMode;
   cbsExecutionEnabled: boolean;
   /** When true, lock userTeamName / draft slot from the live YOU ARE UP state. */
-  inferUserTeamFromYouAreUp: boolean;
+  inferUserTeamFromYouAreUp?: boolean;
+  /** Path to a preseason roster CSV used for per-team need projection. */
+  rosterGridPath?: string;
   notes: string[];
 }
 
@@ -90,6 +104,7 @@ export interface StrategyConfig {
   weights: StrategyWeights;
   earlyRoundPositionPenalties: Partial<Record<Position, number>>;
   kDstEligibleAfterOverallPick: number;
+  qbBackupEligibleAfterOverallPick?: number;
   byeOverlapPenalty: number;
   vorWeight: number;
   recentPickWindow: number;
