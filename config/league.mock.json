@@ -14,6 +14,8 @@
   "completedTrades": [],
   "knownOverallPicks": [],
   "knownPicksArePartial": true,
+  "leaguePicks": [],
+  "leaguePicksArePartial": true,
   "lineup": {
     "QB": 1,
     "RB": 2,

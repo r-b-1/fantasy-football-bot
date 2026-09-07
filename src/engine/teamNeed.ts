@@ -1,5 +1,9 @@
-import { POSITIONS, type LeagueConfig, type Position, type StrategyConfig } from "../domain/types.js";
-import { allTeamNames, teamByName, teamStarterCount, type RosterGrid } from "../data/rosterGrid.js";
+import { POSITIONS, type LeagueConfig, type Position } from "../domain/types.js";
+import { teamNameKey } from "../data/normalize.js";
+import { allTeamNames, teamStarterCount, type RosterGrid } from "../data/rosterGrid.js";
+import { nextOverallPickByTeam } from "./pickOwnership.js";
+
+export { ownerOfPick } from "./pickOwnership.js";
 
 export interface TeamNeed {
   teamName: string;
@@ -48,7 +52,7 @@ export function computeTeamNeeds(args: {
       if (gap > 0) gaps[position] = gap;
       totalGap += gap;
     }
-    const teamKey = name.toLowerCase();
+    const teamKey = teamNameKey(name);
     return {
       teamName: name,
       nextOverallPick: args.nextPicksByTeam.get(teamKey) ?? null,
@@ -64,7 +68,7 @@ export function scoreProjectedPickForTeam(args: {
   position: Position;
   teamNeeds: TeamNeed[];
 }): number {
-  const team = args.teamNeeds.find((need) => need.teamName.toLowerCase() === args.teamName.toLowerCase());
+  const team = args.teamNeeds.find((need) => teamNameKey(need.teamName) === teamNameKey(args.teamName));
   if (!team) return 0;
   const positionGap = team.startingNeed[args.position] ?? 0;
   if (positionGap <= 0) return 0;
@@ -77,42 +81,11 @@ export function weightedNextPickByTeam(args: {
   userTeamName: string;
   knownUserOverallPicks: number[];
 }): Map<string, number> {
-  const teamCount = args.league.teamCount;
-  const result = new Map<string, number>();
-
-  const slotByPick = (overallPick: number) => {
-    const positionInRound = ((overallPick - 1) % teamCount) + 1;
-    const round = Math.ceil(overallPick / teamCount);
-    return round % 2 === 1 ? positionInRound : teamCount - positionInRound + 1;
-  };
-
-  for (let i = 1; i <= teamCount; i += 1) {
-    const userSlots = new Set<number>([args.league.draftSlot]);
-    let candidate = args.currentOverallPick + 1;
-    let found: number | null = null;
-    let safety = teamCount * 4;
-    while (safety-- > 0) {
-      if (slotByPick(candidate) === i) {
-        found = candidate;
-        break;
-      }
-      candidate += 1;
-      if (candidate > 320) break;
-    }
-    if (found != null) {
-      if (userSlots.has(i)) {
-        result.set(args.userTeamName.toLowerCase(), found);
-      } else {
-        result.set(`slot-${i}`, found);
-      }
-    }
-  }
-
-  return result;
+  return nextOverallPickByTeam(args.league, args.currentOverallPick);
 }
 
 function byTeam(roster: RosterGrid, name: string): ReturnedGroup | undefined {
-  return roster.teams.find((team) => team.teamName.toLowerCase() === name.toLowerCase()) as
+  return roster.teams.find((team) => teamNameKey(team.teamName) === teamNameKey(name)) as
     | ReturnedGroup
     | undefined;
 }
@@ -124,7 +97,7 @@ function mergeDraftedAndKeepers(
 ): RosterGrid {
   const byTeam = new Map<string, ReturnedGroup>();
   for (const team of roster.teams) {
-    byTeam.set(team.teamName.toLowerCase(), {
+    byTeam.set(teamNameKey(team.teamName), {
       teamName: team.teamName,
       starters: structuredClone(team.starters)
     });
@@ -135,7 +108,7 @@ function mergeDraftedAndKeepers(
     position: Position,
     isRookie: boolean
   ) => {
-    const key = fantasyTeam.toLowerCase();
+    const key = teamNameKey(fantasyTeam);
     const team = byTeam.get(key);
     if (!team) return;
     const existing = team.starters[position] ?? [];

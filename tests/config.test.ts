@@ -16,6 +16,12 @@ describe("config validation", () => {
     expect(league.keepers.map((k) => k.name)).toEqual(["Ashton Jeanty", "George Pickens"]);
     expect(league.completedTrades).toHaveLength(1);
     expect(league.inferUserTeamFromYouAreUp).toBe(false);
+    expect(league.leaguePicksArePartial).toBe(true);
+    expect(league.draftOrder).toHaveLength(16);
+    expect(league.draftOrder?.[2]).toBe("Pickens My Jeanty");
+    expect(league.leaguePicks.some((entry) => entry.picks.includes(21))).toBe(true);
+    expect(league.leaguePicks.some((entry) => entry.picks.includes(62))).toBe(true);
+    expect(league.leagueKeepersPath).toBe("config/league-keepers.json");
     expect(strategy.candidateShortlistSize).toBe(7);
   });
 
@@ -38,6 +44,20 @@ describe("config validation", () => {
     valid.weights.sportslineRating = 0.99;
     fs.writeFileSync(file, JSON.stringify(valid));
     expect(() => loadStrategyConfig(file)).toThrow(EngineError);
+  });
+
+  it("rejects duplicate overall picks assigned to two teams", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "league-"));
+    const file = path.join(dir, "league.json");
+    const valid = JSON.parse(fs.readFileSync("config/league.current.json", "utf8")) as {
+      leaguePicks: Array<{ teamName: string; picks: number[] }>;
+    };
+    valid.leaguePicks = [
+      { teamName: "Pickens My Jeanty", picks: [3, 21] },
+      { teamName: "Now we're Cookin'", picks: [21, 62] }
+    ];
+    fs.writeFileSync(file, JSON.stringify(valid));
+    expect(() => loadLeagueConfig(file)).toThrow(EngineError);
   });
 
   it("rejects an invalid execution mode", () => {

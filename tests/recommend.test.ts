@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { loadLeagueConfig, loadStrategyConfig } from "../src/config/load.js";
 import { loadSportslineWorkbook } from "../src/data/sportsline.js";
 import { recommendTurn, shouldRecommendForTurn } from "../src/engine/recommend.js";
+import { shouldProjectForTurn } from "../src/engine/predict.js";
 import { eligiblePlayers } from "../src/engine/shortlist.js";
 import {
   applyLiveTurnIdentity,
@@ -63,6 +64,15 @@ describe("recommend turn", () => {
     expect(shouldRecommendForTurn(true, 21, seen)).toBe(21);
     expect(shouldRecommendForTurn(false, 21, seen)).toBeNull();
     expect(shouldRecommendForTurn(true, null, seen)).toBeNull();
+  });
+
+  it("projects once per non-user overall pick and skips the user turn", () => {
+    const seen = new Set<number>([2]);
+    expect(shouldProjectForTurn(true, false, 2, seen)).toBeNull();
+    expect(shouldProjectForTurn(true, false, 4, seen)).toBe(4);
+    expect(shouldProjectForTurn(true, true, 3, seen)).toBeNull();
+    expect(shouldProjectForTurn(false, false, 4, seen)).toBeNull();
+    expect(shouldProjectForTurn(true, false, null, seen)).toBeNull();
   });
 
   it("keeps Jeanty available in a public mock and returns a deterministic shortlist", async () => {

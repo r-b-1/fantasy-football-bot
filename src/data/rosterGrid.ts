@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import type { Position } from "../domain/types.js";
+import { teamNameKey } from "./normalize.js";
 
 export interface RosterEntry {
   name: string;
@@ -142,10 +143,10 @@ export function mergeDraftedIntoRoster(
   drafted: Array<{ fantasyTeam: string; playerName: string; position?: Position }>
 ): RosterGrid {
   const byTeam = new Map<string, TeamRoster>();
-  for (const team of roster.teams) byTeam.set(team.teamName.toLowerCase(), team);
+  for (const team of roster.teams) byTeam.set(teamNameKey(team.teamName), team);
 
   for (const pick of drafted) {
-    const key = pick.fantasyTeam.toLowerCase();
+    const key = teamNameKey(pick.fantasyTeam);
     const team = byTeam.get(key);
     if (!team || !pick.position) continue;
     const position = pick.position;
@@ -171,5 +172,5 @@ export function allTeamNames(roster: RosterGrid): string[] {
 }
 
 export function teamByName(roster: RosterGrid, name: string): TeamRoster | undefined {
-  return roster.teams.find((team) => team.teamName.toLowerCase() === name.toLowerCase());
+  return roster.teams.find((team) => teamNameKey(team.teamName) === teamNameKey(name));
 }

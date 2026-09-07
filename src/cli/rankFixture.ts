@@ -1,12 +1,17 @@
 import { loadLeagueConfig, loadStrategyConfig } from "../config/load.js";
 import { loadDraftFixture } from "../data/fixture.js";
 import { loadRosterGrid } from "../data/rosterGrid.js";
+import { resolveProjectionKeepers } from "../data/leagueKeepers.js";
 import { loadSportslineWorkbook } from "../data/sportsline.js";
 import type { LivePlayer } from "../domain/types.js";
 import { predictNextPicks } from "../ai/predict.js";
 import { formatProjection } from "./format.js";
 import { recommendTurn } from "../engine/recommend.js";
-import { buildDraftStateFromFixture, toLivePlayers } from "../engine/state.js";
+import {
+  buildDraftStateFromFixture,
+  toLivePlayers,
+  unavailableIdsFromFixture
+} from "../engine/state.js";
 
 export interface RankFixtureOptions {
   fixturePath: string;
@@ -49,9 +54,11 @@ export async function predictFixture(options: PredictFixtureOptions): Promise<st
   const strategy = loadStrategyConfig(options.strategyPath);
   const players = loadSportslineWorkbook(options.sportslinePath);
   const fixture = loadDraftFixture(options.fixturePath);
+  const { unavailableIds } = unavailableIdsFromFixture(players, fixture);
   const { state } = buildDraftStateFromFixture(players, fixture, league, strategy);
-  const livePlayers: LivePlayer[] = toLivePlayers(players, new Set());
+  const livePlayers: LivePlayer[] = toLivePlayers(players, unavailableIds);
   const rosterGrid = league.rosterGridPath ? loadRosterGrid(league.rosterGridPath) : undefined;
+  const keepers = resolveProjectionKeepers(league);
   const projection = await predictNextPicks({
     players: livePlayers,
     state,
@@ -59,7 +66,8 @@ export async function predictFixture(options: PredictFixtureOptions): Promise<st
     strategy,
     useAI: options.useAI,
     horizon: options.horizon,
-    rosterGrid
+    rosterGrid,
+    keepers
   });
   return formatProjection(projection);
 }

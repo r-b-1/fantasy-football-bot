@@ -8,7 +8,9 @@ import type {
   StrategyConfig
 } from "../domain/types.js";
 import type { RosterGrid } from "../data/rosterGrid.js";
+import { teamNameKey } from "../data/normalize.js";
 import { computeTeamNeeds, scoreProjectedPickForTeam } from "./teamNeed.js";
+import { buildPickOwnership } from "./pickOwnership.js";
 
 export interface DeterministicProjectionOptions {
   horizon?: number;
@@ -110,22 +112,7 @@ function needAwareProjection(
     keepers: options.keepers
   });
 
-  const snakeSlotByPick = (overallPick: number) => {
-    const positionInRound = ((overallPick - 1) % league.teamCount) + 1;
-    const round = Math.ceil(overallPick / league.teamCount);
-    return round % 2 === 1 ? positionInRound : league.teamCount - positionInRound + 1;
-  };
-
-  const teamBySlot = new Map<number, string>();
-  rosterGrid.teams.forEach((team, index) => {
-    teamBySlot.set(index + 1, team.teamName);
-  });
-  const teamByPick = new Map<number, string>();
-  for (let pick = state.currentOverallPick + 1; pick <= state.currentOverallPick + league.teamCount * 2; pick += 1) {
-    const slot = snakeSlotByPick(pick);
-    const team = teamBySlot.get(slot);
-    if (team) teamByPick.set(pick, team);
-  }
+  const teamByPick = buildPickOwnership(league);
   const available = new Map<string, LivePlayer>();
   for (const player of players) {
     if (player.available && state.availablePlayerIds.has(player.id) && player.adp != null) {
@@ -135,7 +122,7 @@ function needAwareProjection(
 
   const teamCounts = new Map<string, Partial<Record<Position, number>>>();
   for (const need of teamNeeds) {
-    teamCounts.set(need.teamName.toLowerCase(), { ...need.startingNeed });
+    teamCounts.set(teamNameKey(need.teamName), { ...need.startingNeed });
   }
   const projected: ProjectedPick[] = [];
   const notes: string[] = [];
@@ -143,8 +130,12 @@ function needAwareProjection(
 
   for (let pick = state.currentOverallPick + 1; pick <= state.currentOverallPick + horizon * 2; pick += 1) {
     if (projected.length >= horizon) break;
-    const teamName = teamByPick.get(pick) ?? league.userTeamName;
-    const counts = teamCounts.get(teamName.toLowerCase()) ?? {};
+    const teamName = teamByPick.get(pick);
+    if (!teamName) {
+      notes.push(`No owner configured for pick ${pick} (add leaguePicks or draftOrder).`);
+      continue;
+    }
+    const counts = teamCounts.get(teamNameKey(teamName)) ?? {};
     const isEarlyRound = pick < 130;
     const candidates: Array<{ player: LivePlayer; score: number; need: number }> = [];
     for (const player of available.values()) {
@@ -174,10 +165,10 @@ function needAwareProjection(
     candidates.sort((a, b) => b.score - a.score);
     const chosen = candidates[0]!;
     usedPlayerIds.add(chosen.player.id);
-    const countsForTeam = teamCounts.get(teamName.toLowerCase()) ?? {};
+    const countsForTeam = teamCounts.get(teamNameKey(teamName)) ?? {};
     const current = countsForTeam[chosen.player.position] ?? 0;
     countsForTeam[chosen.player.position] = Math.max(0, current - 1);
-    teamCounts.set(teamName.toLowerCase(), countsForTeam);
+    teamCounts.set(teamNameKey(teamName), countsForTeam);
     projected.push({
       playerId: chosen.player.id,
       playerName: chosen.player.name,
@@ -215,4 +206,16 @@ export function projectionHorizonFromStrategy(strategy: StrategyConfig): number 
   if (size <= 5) return 6;
   if (size <= 10) return 8;
   return 10;
+}
+
+export function shouldProjectForTurn(
+  showProjection: boolean,
+  isUserTurn: boolean,
+  currentOverallPick: number | null,
+  alreadyProjected: ReadonlySet<number>
+): number | null {
+  if (!showProjection || isUserTurn) return null;
+  if (currentOverallPick == null || currentOverallPick <= 0) return null;
+  if (alreadyProjected.has(currentOverallPick)) return null;
+  return currentOverallPick;
 }

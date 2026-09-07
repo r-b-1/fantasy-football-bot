@@ -6,6 +6,19 @@ export function normalizeHeader(value: string): string {
   return value.replace(/\s+/g, " ").trim().toUpperCase();
 }
 
+export function normalizeTeamName(name: string): string {
+  return name
+    .normalize("NFKD")
+    .replace(/\p{M}/gu, "")
+    .replace(APOSTROPHES, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function teamNameKey(name: string): string {
+  return normalizeTeamName(name).toLowerCase();
+}
+
 export function normalizePlayerName(name: string, position?: Position): string {
   let normalized = name
     .normalize("NFKD")

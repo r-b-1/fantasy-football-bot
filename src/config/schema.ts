@@ -10,6 +10,11 @@ export const CompletedTradeSchema = z.object({
   receivedOverallPicks: z.array(z.number().int().positive())
 });
 
+export const LeaguePickAssignmentSchema = z.object({
+  teamName: z.string().min(1),
+  picks: z.array(z.number().int().positive())
+});
+
 export const LeagueConfigSchema = z.object({
   platform: z.literal("CBS"),
   season: z.number().int(),
@@ -31,6 +36,13 @@ export const LeagueConfigSchema = z.object({
   completedTrades: z.array(CompletedTradeSchema).default([]),
   knownOverallPicks: z.array(z.number().int().positive()),
   knownPicksArePartial: z.boolean(),
+  /** Team names in draft-slot order (slot 1 first). Used to seed snake pick ownership. */
+  draftOrder: z.array(z.string().min(1)).optional(),
+  /** Explicit pick inventory per team. Overlay on snake math; required for traded picks. */
+  leaguePicks: z.array(LeaguePickAssignmentSchema).default([]),
+  leaguePicksArePartial: z.boolean(),
+  /** Optional JSON/CSV of league-wide keepers: { fantasyTeam, name, position }. */
+  leagueKeepersPath: z.string().min(1).optional(),
   lineup: z.object({
     QB: z.number().int().nonnegative(),
     RB: z.number().int().nonnegative(),
