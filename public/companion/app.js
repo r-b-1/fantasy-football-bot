@@ -7,6 +7,37 @@ let activeIndex = -1;
 let busy = false;
 let ready = false;
 let sourceBeforeChange = "fantasypros";
+let lastRecKey = "";
+let pollTimer = null;
+let liveConfirmOpen = false;
+
+function roomWritable() {
+  return !state?.room || state.room.writable;
+}
+function formatClock(seconds, label) {
+  if (label) return label;
+  if (seconds == null || Number.isNaN(Number(seconds))) return "";
+  const sec = Math.max(0, Math.floor(Number(seconds)));
+  const days = Math.floor(sec / 86400);
+  const hours = Math.floor((sec % 86400) / 3600);
+  const minutes = Math.floor((sec % 3600) / 60);
+  const remain = sec % 60;
+  const parts = [];
+  if (days) parts.push(`${days} day${days === 1 ? "" : "s"}`);
+  if (hours) parts.push(`${hours} hour${hours === 1 ? "" : "s"}`);
+  if (minutes) parts.push(`${minutes} minute${minutes === 1 ? "" : "s"}`);
+  if (!days && (remain > 0 || parts.length === 0)) parts.push(`${remain} second${remain === 1 ? "" : "s"}`);
+  return parts.join(" ");
+}
+function roomCopy(room) {
+  const attached = room?.url || room?.targetUrl || "";
+  if (!room || room.status === "disconnected") return { label: "Manual companion", note: "Record what happens in CBS here, or watch a draft room so picks appear automatically. Nothing in this companion submits a pick to your league.", detail: "" };
+  if (room.status === "connecting") return { label: "Connecting to draft room", note: "Opening the draft room. Recording stays locked until the companion is reading it.", detail: attached };
+  if (room.status === "awaiting_draft_room") return { label: "Waiting for CBS Draft Room", note: "Use the Chrome window this app opened, not another browser tab. Finish login there if needed. It is going to the live room and stays read-only.", detail: attached };
+  if (room.status === "error") return { label: "Draft room error", note: room.error || "The draft room connection failed. You can record locally or try again.", detail: attached };
+  if (room.kind === "live") return { label: "Watching CBS draft room", note: "This UI is reading CBS. Clock and new picks should match that Chrome window. Nothing here submits a pick.", detail: attached };
+  return { label: "Watching local draft room", note: "Picks are coming from the local fake draft room. Disconnect to keep this board and record the rest by hand.", detail: attached };
+}
 
 // Provider and player text is inserted as text, never interpreted as HTML.
 function element(tag, className, text) {
@@ -34,15 +65,28 @@ async function api(path, body) {
   return data;
 }
 function updateControls() {
-  $("playerSearch").disabled = busy || !ready;
+  const writable = roomWritable();
+  const watching = Boolean(state?.room && !state.room.writable);
+  $("playerSearch").disabled = busy || !ready || !writable;
   $("sourceSelect").disabled = busy || !ready;
-  $("submitPick").disabled = busy || !ready || !selected;
-  $("undoBtn").disabled = busy || !ready || !state?.draftedCount;
-  $("resetBtn").disabled = busy || !ready || !state?.draftedCount;
-  $("confirmReset").disabled = busy || !ready;
+  $("submitPick").disabled = busy || !ready || !writable || !selected;
+  $("undoBtn").disabled = busy || !ready || !writable || !state?.draftedCount;
+  $("resetBtn").disabled = busy || !ready || !writable || !state?.draftedCount;
+  $("confirmReset").disabled = busy || !ready || !writable;
   $("clearSearch").disabled = busy;
-  document.querySelectorAll(".select-rec").forEach((button) => { button.disabled = busy || !ready; });
+  $("watchFixtureBtn").disabled = busy || !ready || watching;
+  $("watchLiveBtn").disabled = busy || !ready || watching || !state?.room?.liveAllowed;
+  $("disconnectRoomBtn").disabled = busy || !ready || !watching;
+  $("confirmLive").disabled = busy || !ready || watching;
+  document.querySelectorAll(".select-rec").forEach((button) => { button.disabled = busy || !ready || !writable; });
   $("recommendList").setAttribute("aria-busy", String(busy));
+  $("watchFixtureBtn").hidden = watching;
+  $("watchLiveBtn").hidden = watching || liveConfirmOpen || Boolean(state?.room && !state.room.liveAllowed);
+  $("disconnectRoomBtn").hidden = !watching;
+  if (watching) {
+    liveConfirmOpen = false;
+    $("liveConfirmation").hidden = true;
+  }
 }
 function closeSearch() {
   $("searchPopup").hidden = true;
@@ -88,7 +132,7 @@ function highlight(index) {
   } else $("playerSearch").removeAttribute("aria-activedescendant");
 }
 function search() {
-  if (!state || busy || !ready) return;
+  if (!state || busy || !ready || !roomWritable()) return;
   const query = normalize($("playerSearch").value);
   const sorted = [...state.availablePlayers].sort((a, b) => state.source === "fantasypros"
     ? (a.fantasyProsRank ?? Infinity) - (b.fantasyProsRank ?? Infinity) || a.name.localeCompare(b.name)
@@ -119,17 +163,57 @@ function search() {
 
 function renderState(s) {
   state = s;
+  const room = s.room ?? { kind: "manual", status: "disconnected", writable: true, liveAllowed: true, conflicts: [] };
+  const copy = roomCopy(room);
   $("leagueName").textContent = s.leagueName;
   $("leagueFormat").textContent = `${s.teamCount} teams / Keeper draft`;
   $("userTeam").textContent = s.userTeamName;
-  $("currentPick").textContent = String(s.currentOverallPick).padStart(2, "0");
+  $("roomLabel").dataset.status = room.status;
+  $("roomLabelText").textContent = copy.label;
+  $("roomDetail").textContent = copy.detail || "";
+  $("roomDetail").hidden = !copy.detail;
+  $("sessionNote").textContent = copy.note;
+  $("pickEyebrow").textContent = s.waitingToStart ? "Draft starts in" : "Overall pick";
+  $("currentPick").textContent = s.waitingToStart ? "—" : String(s.currentOverallPick).padStart(2, "0");
+  const clockText = formatClock(s.clockSecondsRemaining, s.clockLabel);
+  $("draftClock").textContent = s.waitingToStart && clockText ? `${clockText} until start` : clockText;
+  $("draftClock").hidden = !clockText;
+  $("draftClockRaw").textContent = s.clockRaw ? `CBS ${s.clockRaw}` : "";
+  $("draftClockRaw").hidden = !s.clockRaw;
   $("clockTeam").textContent = s.teamOnClock;
-  $("turnLabel").textContent = s.isUserTurn ? "You're on the clock" : "On the clock";
+  $("turnLabel").textContent = s.waitingToStart ? "Waiting for start" : s.isUserTurn ? "You're on the clock" : "On the clock";
   document.querySelector(".clock-strip").classList.toggle("your-turn", s.isUserTurn);
-  $("turnContext").textContent = `Round ${s.round} / ${s.draftedCount} pick${s.draftedCount === 1 ? "" : "s"} recorded`;
+  const pickSource = room.writable ? "recorded" : "from the room";
+  $("turnContext").textContent = s.waitingToStart
+    ? (clockText ? `${clockText} until CBS starts the draft.` : "CBS has not started the draft.")
+    : `Round ${s.round} / ${s.draftedCount} pick${s.draftedCount === 1 ? "" : "s"} ${pickSource}`;
+  $("pickInterval").textContent = s.pickIntervalLabel
+    || (room.status === "watching" ? "CBS is not showing time between picks on this screen." : "");
+  $("pickInterval").hidden = !$("pickInterval").textContent;
+  const orderSource = s.draftOrderSource === "cbs" ? "CBS draft order" : s.draftOrderSource === "config" ? "Configured draft order" : "Draft order not on this CBS screen";
+  $("draftOrderLabel").textContent = orderSource;
+  $("draftOrderNote").textContent = s.draftOrderSource === "cbs"
+    ? (s.draftOrder?.length < s.teamCount
+      ? `CBS team list is showing ${s.draftOrder.length} of ${s.teamCount} teams. The companion clicks the right arrow in that row to collect the rest.`
+      : "Read from the CBS team list. Later rounds use that order as a snake.")
+    : s.draftOrderSource === "config"
+      ? "Used while you record locally. Watch CBS to replace this with the room."
+      : "The room is attached, but team names were not in the CBS team-list labels.";
+  $("draftOrder").replaceChildren(...(s.draftOrder ?? []).map((team, index) => {
+    const isYou = team === s.userTeamName;
+    const entry = element("div", `order-team${isYou ? " is-you" : ""}`);
+    entry.append(element("strong", "", `${index + 1}`), element("span", "", team));
+    return entry;
+  }));
   $("nextPick").textContent = s.isUserTurn ? "You're up" : s.nextUserOverallPick == null ? "Not confirmed" : `#${s.nextUserOverallPick}`;
-  $("pickDistance").textContent = s.isUserTurn ? "Choose your player below" : s.nextUserOverallPick == null ? "Verify late picks in CBS" : `${s.nextUserOverallPick - s.currentOverallPick} picks until your turn`;
-  $("recordFor").textContent = `Recording #${s.currentOverallPick} for ${s.teamOnClock}.`;
+  $("pickDistance").textContent = s.isUserTurn ? (room.writable ? "Choose your player below" : "Watch the room, then pick there") : s.nextUserOverallPick == null ? "Verify late picks in CBS" : `${s.nextUserOverallPick - s.currentOverallPick} picks until your turn`;
+  $("recordFor").textContent = room.writable
+    ? `Recording #${s.currentOverallPick} for ${s.teamOnClock}.`
+    : `Pick #${s.currentOverallPick} is coming from the draft room for ${s.teamOnClock}.`;
+  $("recordTitle").textContent = room.writable ? "Who just got picked?" : "The room is updating the board";
+  $("roomConflicts").hidden = !room.conflicts?.length;
+  $("roomConflicts").textContent = room.conflicts?.length ? room.conflicts.join(" ") : "";
+  if (selected && !s.availablePlayers.some((player) => player.id === selected.id)) clearSelection();
   $("availableCount").textContent = `${s.availablePlayers.length} available`;
   $("sourceSelect").value = s.source;
   sourceBeforeChange = s.source;
@@ -215,16 +299,31 @@ function renderRecommendations(data) {
     container.append(row);
   }
 }
+function syncPolling() {
+  const watching = Boolean(state?.room && !state.room.writable);
+  if (watching && !pollTimer) {
+    pollTimer = setInterval(() => { if (!busy) refresh().catch(() => {}); }, 1000);
+  }
+  if (!watching && pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+}
 async function refresh() {
   const s = await api("state");
   renderState(s);
   ready = true;
   $("retryBtn").hidden = true;
-  try { renderRecommendations(await api("recommend")); }
-  catch (error) {
-    $("recommendList").replaceChildren(element("p", "empty-state", `Suggestions unavailable: ${error.message} You can still record picks.`));
+  const recKey = `${s.source}:${s.currentOverallPick}:${s.draftedCount}:${s.room?.status ?? "disconnected"}`;
+  if (recKey !== lastRecKey) {
+    lastRecKey = recKey;
+    try { renderRecommendations(await api("recommend")); }
+    catch (error) {
+      $("recommendList").replaceChildren(element("p", "empty-state", `Suggestions unavailable: ${error.message} You can still ${s.room?.writable === false ? "watch the room" : "record picks"}.`));
+    }
   }
   updateControls();
+  syncPolling();
 }
 async function mutate(path, body, success) {
   if (busy || !ready) return;
@@ -288,6 +387,24 @@ $("sourceSelect").addEventListener("change", () => mutate("source", { source: $(
 $("resetBtn").addEventListener("click", () => { $("resetConfirmation").hidden = false; $("resetBtn").hidden = true; $("cancelReset").focus(); });
 $("cancelReset").addEventListener("click", () => { $("resetConfirmation").hidden = true; $("resetBtn").hidden = false; $("resetBtn").focus(); });
 $("confirmReset").addEventListener("click", () => mutate("reset", {}, () => "Draft reset. Keepers are still in place."));
+function hideLiveConfirm() {
+  liveConfirmOpen = false;
+  $("liveConfirmation").hidden = true;
+  updateControls();
+}
+$("watchFixtureBtn").addEventListener("click", () => mutate("room/connect", { source: "fixture" }, () => "Watching the local fake draft room. Picks will appear here automatically."));
+$("watchLiveBtn").addEventListener("click", () => {
+  liveConfirmOpen = true;
+  $("watchLiveBtn").hidden = true;
+  $("liveConfirmation").hidden = false;
+  $("confirmLive").focus();
+});
+$("cancelLive").addEventListener("click", () => { hideLiveConfirm(); $("watchLiveBtn").focus(); });
+$("confirmLive").addEventListener("click", async () => {
+  hideLiveConfirm();
+  await mutate("room/connect", { source: "live" }, () => "CBS Chrome is open. Open Draft Room there. This companion stays read-only.");
+});
+$("disconnectRoomBtn").addEventListener("click", () => mutate("room/disconnect", {}, () => "Disconnected. The last synced board is still here so you can record the rest by hand."));
 async function load() {
   if (busy) return;
   busy = true; updateControls();

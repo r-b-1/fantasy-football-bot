@@ -104,6 +104,13 @@ describe("companion server", { timeout: 15000 }, () => {
     expect(state.teamOnClock).toBe("Hairy Butterscotch");
     expect(state.picks).toEqual([]);
     expect(state.source).toBe("fantasypros");
+    expect((body as { room: { status: string; writable: boolean; liveAllowed: boolean; targetUrl: string | null } }).room).toMatchObject({
+      kind: "manual",
+      status: "disconnected",
+      writable: true,
+      liveAllowed: false,
+      targetUrl: null
+    });
     const metadata = body as CompanionState;
     expect(metadata.leagueName).toBe("All in the Family FFBL");
     expect(metadata.userTeamName).toBe("Pickens My Jeanty");
@@ -111,6 +118,8 @@ describe("companion server", { timeout: 15000 }, () => {
     expect(metadata.lineup).toEqual({ QB: 1, RB: 2, WR: 3, TE: 1, K: 1, DST: 1 });
     expect(metadata.knownOverallPicks).toEqual([3, 21, 30, 35, 67, 94, 99, 126, 131, 158]);
     expect(metadata.round).toBe(1);
+    expect((body as { draftOrderSource: string }).draftOrderSource).toBe("config");
+    expect((body as { pickIntervalLabel: string }).pickIntervalLabel).toBe("");
     expect(metadata.upcomingPicks).toEqual([
       { overallPick: 1, fantasyTeam: "Hairy Butterscotch" },
       { overallPick: 2, fantasyTeam: "Gibbs me a win" },

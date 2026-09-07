@@ -59,4 +59,25 @@ describe("rich local fake draft room (16-team)", () => {
     expect(results.every((result) => !keeperNames.includes(result.playerName))).toBe(true);
     expect(results[0]?.playerName).toBe("Josh Jacobs");
   });
+
+  it("clicks the team-list right arrow to collect every team, then restores the first page", async () => {
+    await session.page.waitForFunction(
+      () => document.querySelectorAll("[data-testid='draft-order'] li").length === 12
+    );
+    const visibleBefore = await session.page.locator("[data-testid='draft-order'] li").allInnerTexts();
+    expect(visibleBefore).toHaveLength(12);
+    expect(visibleBefore.join(" ")).not.toContain("Spider Monkeys");
+
+    const sportsline = loadSportslineWorkbook("data/reference/cheatsheet_cbsppr12.xlsx");
+    const players: LivePlayer[] = toLivePlayers(sportsline, new Set());
+    const reader = new CBSReader(session.page, selectors, league);
+    const snapshot = await reader.readLiveSnapshot(players);
+
+    expect(snapshot.control.draftOrder).toHaveLength(16);
+    expect(snapshot.control.draftOrder).toContain("Spider Monkeys");
+    expect(snapshot.control.draftOrder).not.toContain("NJigBA Please");
+    const visibleAfter = await session.page.locator("[data-testid='draft-order'] li").allInnerTexts();
+    expect(visibleAfter).toHaveLength(12);
+    expect(visibleAfter.join(" ")).not.toContain("Spider Monkeys");
+  });
 });

@@ -25,7 +25,8 @@
     "cbs:fixture": "tsx src/index.ts cbs-fixture",
     "cbs:fixture-confirm": "tsx src/index.ts cbs-fixture-confirm",
     "cbs:fixture-projection": "tsx src/index.ts cbs-fixture-projection",
-    "companion": "tsx src/index.ts companion"
+    "companion": "tsx src/index.ts companion",
+    "companion:room": "COMPANION_ROOM=fixture tsx src/index.ts companion"
   },
   "dependencies": {
     "dotenv": "^16.6.1",

@@ -1,8 +1,9 @@
 import fs from "node:fs";
 import readline from "node:readline";
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
-import { assertAllowedCbsUrl, isAllowedCbsUrl, leagueOrigin, pickDraftRoomUrl } from "./allowlist.js";
+import { assertAllowedCbsUrl, isAllowedCbsUrl, leagueStartUrl, looksLikeCbsDraftRoom, pickDraftRoomUrl } from "./allowlist.js";
 import { domainNotAllowed } from "./errors.js";
+import type { SelectorConfig } from "./selectors.js";
 
 export interface CBSSession {
   context: BrowserContext;
@@ -14,7 +15,8 @@ export async function openCBSSession(profileDir: string): Promise<CBSSession> {
   fs.mkdirSync(profileDir, { recursive: true });
   const context = await chromium.launchPersistentContext(profileDir, {
     headless: false,
-    channel: "chrome"
+    channel: "chrome",
+    args: ["--hide-crash-restore-bubble"]
   });
   const pages = context.pages();
   const page = pages[0] ?? (await context.newPage());
@@ -44,7 +46,7 @@ export async function openAllowlistedCbsPage(
   page: Page,
   draftRoomUrlPattern: string
 ): Promise<void> {
-  await openAllowlistedUrl(page, leagueOrigin(draftRoomUrlPattern));
+  await openAllowlistedUrl(page, leagueStartUrl(draftRoomUrlPattern));
 }
 
 export async function openLoggedInDraftRoom(options: {
@@ -98,6 +100,33 @@ export async function focusDraftRoomPage(
     await match.bringToFront().catch(() => undefined);
   }
   return { page: session.page, urls };
+}
+
+export async function pickReadableDraftRoomPage(
+  session: CBSSession,
+  selectors: SelectorConfig,
+  preferredPattern?: string
+): Promise<{ page: Page; urls: string[] }> {
+  const focused = await focusDraftRoomPage(session, preferredPattern);
+  const probe =
+    selectors.selectors.countdownClock ??
+    selectors.selectors.currentPick ??
+    selectors.selectors.youAreUpIndicator;
+  if (!probe) return focused;
+  for (const page of session.context.pages()) {
+    if (!looksLikeCbsDraftRoom(page.url())) continue;
+    const visible = await page
+      .locator(probe)
+      .first()
+      .isVisible({ timeout: 2000 })
+      .catch(() => false);
+    if (visible) {
+      session.page = page;
+      await page.bringToFront().catch(() => undefined);
+      return { page, urls: session.context.pages().map((open) => open.url()) };
+    }
+  }
+  return focused;
 }
 
 export async function summarizeAccessibility(page: Page): Promise<string[]> {

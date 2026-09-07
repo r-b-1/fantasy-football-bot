@@ -1,7 +1,7 @@
 {
   "kind": "live",
   "status": "CONFIGURED_FROM_LIVE_ROOM2_PREDRAFT",
-  "instructions": "Locators captured from the logged-in All in the Family draft room at /draft/live/room2 on 2026-08-13. CBS uses dotted YUI ids (id=\"DraftRoom.views.timer\"), so attribute selectors are required. Do not use yui-gen* ids. Column nth-child values come from the live table headers PLAYER/POS/TEAM and PICK/TEAM/PLAYER. Draft/search/confirm locators are still null because those controls were not visible before the draft started. Never click TURN ON AUTOPILOT.",
+  "instructions": "Locators captured from the logged-in All in the Family draft room at /draft/live/room2 on 2026-08-13. CBS uses dotted YUI ids (id=\"DraftRoom.views.timer\"), so attribute selectors are required. Do not use yui-gen* ids. Column nth-child values come from the live table headers PLAYER/POS/TEAM and PICK/TEAM/PLAYER. Team-list pager arrows captured 2026-09-07 inside DraftRoom.views.teamlist: a.icon-chevron-right and span.icon-chevron-left (icon-grey-2 when disabled). Do not click icon-arrow-right under a team logo. Draft/search/confirm locators are still null because those controls were not visible before the draft started. Never click TURN ON AUTOPILOT.",
   "draftRoomUrlPattern": "allfam.football.cbssports.com/draft/live/room2",
   "selectors": {
     "currentPick": "[id=\"DraftRoom.views.status\"]",

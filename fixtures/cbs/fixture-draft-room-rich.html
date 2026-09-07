@@ -14,8 +14,14 @@
     .status { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
     .pick { font-size: 28px; font-weight: 800; }
     .clock { font-variant-numeric: tabular-nums; font-size: 28px; color: #7ee0a3; }
-    #you-are-up { display: none; background: #215c34; color: #d6ffd9; padding: 8px 12px; border-radius: 8px; font-weight: 700; }
-    #you-are-up.visible { display: inline-block; }
+    [data-testid="you-are-up"] { margin-top: 8px; }
+    #you-are-up-banner { display: none; background: #215c34; color: #d6ffd9; padding: 8px 12px; border-radius: 8px; font-weight: 700; }
+    #you-are-up-banner.visible { display: inline-block; }
+    .draft-order { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; margin: 8px 0 0; }
+    .draft-order li { font-size: 11px; background: #243044; padding: 2px 6px; border-radius: 4px; }
+    .order-pager { display: flex; align-items: center; gap: 8px; }
+    .order-pager button { min-width: 32px; background: #2b3b55; color: #e8edf5; }
+    [data-testid="pick-interval"] { font-size: 12px; color: #9fb1cc; margin-top: 4px; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     th, td { text-align: left; padding: 5px 6px; border-bottom: 1px solid #2b3b55; }
     .ours { background: #243d2c; }
@@ -39,7 +45,15 @@
         </div>
         <div>
           <div class="clock" data-testid="countdown-clock">0:08</div>
-          <div id="you-are-up" data-testid="you-are-up">YOU ARE UP — Pickens My Jeanty</div>
+          <div data-testid="pick-interval">Time Between Picks: 1:30</div>
+          <div data-testid="you-are-up">
+            <div id="you-are-up-banner">YOU ARE UP — Pickens My Jeanty</div>
+            <div class="order-pager">
+              <button type="button" id="draft-order-prev" class="icon-chevron-left" disabled>&lt;</button>
+              <ol data-testid="draft-order" class="draft-order"></ol>
+              <button type="button" id="draft-order-next" class="icon-chevron-right">&gt;</button>
+            </div>
+          </div>
         </div>
       </div>
       <h2>Draft results</h2>
@@ -76,7 +90,12 @@
     const clockEl = document.querySelector("[data-testid='countdown-clock']");
     const roundEl = document.querySelector("[data-testid='round']");
     const slotEl = document.querySelector("[data-testid='slot']");
-    const youAreUp = document.getElementById("you-are-up");
+    const youAreUp = document.getElementById("you-are-up-banner");
+    const draftOrderEl = document.querySelector("[data-testid='draft-order']");
+    const draftOrderPrev = document.getElementById("draft-order-prev");
+    const draftOrderNext = document.getElementById("draft-order-next");
+    let draftOrderOffset = 0;
+    const DRAFT_ORDER_PAGE = 12;
     const resultsBody = document.getElementById("results");
     const rosterEl = document.getElementById("roster");
     const leagueKeepersEl = document.getElementById("league-keepers");
@@ -112,6 +131,25 @@
       rosterEl.innerHTML = ours.map((line) => '<li data-testid="roster-player">' + line + "</li>").join("");
     }
 
+    function renderDraftOrder(teams) {
+      const shown = teams.slice();
+      if (shown.length > 13) shown[13] = "Spider Monkeys";
+      const slice = shown.slice(draftOrderOffset, draftOrderOffset + DRAFT_ORDER_PAGE);
+      draftOrderEl.innerHTML = slice.map((team) =>
+        '<li><img alt="' + team + '" title="' + team + '" width="1" height="1"> ' + team + "</li>"
+      ).join("");
+      draftOrderPrev.disabled = draftOrderOffset <= 0;
+      draftOrderNext.disabled = draftOrderOffset + DRAFT_ORDER_PAGE >= shown.length;
+      draftOrderPrev.onclick = function () {
+        draftOrderOffset = Math.max(0, draftOrderOffset - 4);
+        renderDraftOrder(teams);
+      };
+      draftOrderNext.onclick = function () {
+        draftOrderOffset = Math.min(Math.max(0, shown.length - DRAFT_ORDER_PAGE), draftOrderOffset + 4);
+        renderDraftOrder(teams);
+      };
+    }
+
     function renderLeagueKeepers(keepers) {
       const lines = keepers
         .slice()
@@ -144,6 +182,7 @@
       renderResults(results);
       renderRoster(script.keepers, results);
       renderLeagueKeepers(script.keepers);
+      renderDraftOrder(script.teams);
     }
 
     function nextAutopick(script, takenNames) {
@@ -169,6 +208,7 @@
       renderResults(window.__results);
       renderRoster(window.__script.keepers, window.__results);
       renderLeagueKeepers(window.__script.keepers);
+      renderDraftOrder(window.__script.teams);
       searchInput.disabled = !ours;
       draftBtn.disabled = !ours || Boolean(window.__pendingPlayer);
       confirmBtn.disabled = !ours || !window.__pendingPlayer;

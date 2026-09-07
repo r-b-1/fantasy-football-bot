@@ -12,7 +12,7 @@ import {
   DEFAULT_CBS_MOCK_DRAFT_URL,
   isAllInTheFamilyHost,
   isAllowedCbsUrl,
-  leagueOrigin,
+  leagueStartUrl,
   looksLikeCbsDraftRoom
 } from "./allowlist.js";
 import { inspectDraftRoom, writeDiagnoseDump } from "./inspect.js";
@@ -34,7 +34,7 @@ export async function runCbsDiagnose(options: { mock?: boolean } = {}): Promise<
   const profileDir = process.env.CBS_BROWSER_PROFILE_DIR ?? ".local/cbs-browser-profile";
   const startUrl = mock
     ? (process.env.CBS_MOCK_DRAFT_URL ?? DEFAULT_CBS_MOCK_DRAFT_URL)
-    : leagueOrigin(selectors.draftRoomUrlPattern);
+    : leagueStartUrl(selectors.draftRoomUrlPattern);
 
   console.log(`League: ${league.leagueName} / ${league.userTeamName}`);
   console.log(`Selector config: ${selectorPath} (${selectors.status})`);

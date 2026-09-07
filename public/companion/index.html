@@ -16,15 +16,29 @@
   <header class="masthead">
     <div class="brand"><span class="brand-mark" aria-hidden="true">DC<span>+</span></span><div><span class="eyebrow">Your draft-night edge</span><h1>Draft Companion</h1></div></div>
     <div class="league-meta"><span id="leagueName">All in the Family FFBL</span><span id="leagueFormat">16 teams / Keeper draft</span></div>
-    <span class="local-label"><span aria-hidden="true"></span> Manual companion</span>
+    <div class="room-controls">
+      <span class="local-label" id="roomLabel" data-status="disconnected"><span aria-hidden="true"></span><span id="roomLabelText">Manual companion</span></span>
+      <span id="roomDetail" class="room-detail" hidden></span>
+      <div class="room-actions">
+        <button id="watchFixtureBtn" class="secondary-button" type="button">Watch local room</button>
+        <button id="watchLiveBtn" class="secondary-button" type="button">Watch CBS</button>
+        <button id="disconnectRoomBtn" class="text-button" type="button" hidden>Disconnect</button>
+        <span id="liveConfirmation" hidden>Open CBS Chrome to the All in the Family live room? You log in yourself in that window. This never submits a pick. <button id="confirmLive" class="secondary-button" type="button">Yes, open CBS</button><button id="cancelLive" class="text-button" type="button">Cancel</button></span>
+      </div>
+    </div>
   </header>
   <main>
     <section class="clock-strip" aria-label="Draft status">
-      <div class="pick-number"><span class="eyebrow">Overall pick</span><strong id="currentPick">--</strong></div>
-      <div class="on-clock"><span class="eyebrow" id="turnLabel">On the clock</span><h2 id="clockTeam">Loading draft...</h2><p id="turnContext">Connecting to your local draft room.</p></div>
+      <div class="pick-number"><span class="eyebrow" id="pickEyebrow">Overall pick</span><strong id="currentPick">--</strong><span id="draftClock" class="clock-remaining" hidden></span><span id="draftClockRaw" class="clock-raw" hidden></span></div>
+      <div class="on-clock"><span class="eyebrow" id="turnLabel">On the clock</span><h2 id="clockTeam">Loading draft...</h2><p id="turnContext">Connecting to your local draft room.</p><p id="pickInterval" class="pick-interval" hidden></p></div>
       <div class="next-turn"><span class="eyebrow">Your next turn</span><strong id="nextPick">--</strong><span id="pickDistance">Checking pick order</span></div>
     </section>
+    <div class="order-board">
+      <div class="order-heading"><span class="eyebrow" id="draftOrderLabel">Draft order</span><span id="draftOrderNote" class="order-note"></span></div>
+      <div id="draftOrder" class="draft-order" aria-label="Draft order"></div>
+    </div>
     <div id="upcomingPicks" class="pick-track" aria-label="Upcoming pick order"></div>
+    <div id="roomConflicts" class="notice error" role="status" hidden></div>
     <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
     <button id="retryBtn" class="text-button" type="button" hidden>Retry connection</button>
     <div class="workspace">
@@ -53,7 +67,7 @@
       <aside class="roster-column" aria-label="Your draft overview">
         <section class="roster-section"><span class="eyebrow">The team you're building</span><h2 id="userTeam">Pickens My Jeanty</h2><div class="roster-summary"><strong id="rosterCount">-- players</strong><span id="starterCount">Checking lineup</span></div><div id="rosterList"></div><p class="small-note">Keepers count toward your lineup needs.</p></section>
         <details class="keepers-section"><summary><span>League keepers</span><span id="keeperCount" class="count-tag">--</span></summary><p class="small-note">Already rostered and excluded from player search.</p><div id="keepersList"></div></details>
-        <section class="session-note"><span class="eyebrow">A second screen, not autopilot</span><p>Record what happens in CBS here. Nothing in this companion submits a pick to your league.</p><p>Session is held in server memory. Restarting the server clears recorded picks.</p></section>
+        <section class="session-note"><span class="eyebrow">A second screen, not autopilot</span><p id="sessionNote">Record what happens in CBS here, or watch a draft room so picks appear automatically. Nothing in this companion submits a pick to your league.</p><p>Session is held in server memory. Restarting the server clears recorded picks.</p></section>
       </aside>
     </div>
     <section class="history-section" aria-labelledby="historyTitle"><div class="section-heading"><div><span class="eyebrow">03 / The story so far</span><h2 id="historyTitle">Draft log <span id="historyCount" class="heading-count">0</span></h2></div><button id="undoBtn" class="secondary-button" type="button" disabled>Undo last pick</button></div><div id="historyList"><p class="empty-state">A clean board. Record the first pick above to start your draft log.</p></div></section>

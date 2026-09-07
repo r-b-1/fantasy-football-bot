@@ -5,13 +5,15 @@ import {
   isAllowedCbsUrl,
   isAllowedFixtureUrl,
   leagueOrigin,
+  leagueStartUrl,
   looksLikeCbsDraftRoom,
   looksLikeCbsMockDraftLobby,
   pickDraftRoomUrl
 } from "../src/cbs/allowlist.js";
 import { detectConfigConflicts } from "../src/cbs/conflicts.js";
 import { shouldInspectFrame } from "../src/cbs/inspect.js";
-import { parseClockSeconds, parseOverallPick, parseOverallPickLenient, interpretYouAreUp, formatClockSeconds, formatOnClockStatus } from "../src/cbs/parse.js";
+import { parseClockSeconds, parseOverallPick, parseOverallPickLenient, interpretYouAreUp, formatClockSeconds, formatClockDuration, formatOnClockStatus } from "../src/cbs/parse.js";
+import { extractPickIntervalRaw, formatPickInterval, mergeDraftOrder, ownerFromDraftOrder, parsePickIntervalSeconds, parseTeamLabels } from "../src/cbs/roomFacts.js";
 import { resyncFromDraftResults } from "../src/cbs/resync.js";
 import { loadLeagueConfig } from "../src/config/load.js";
 import { loadSportslineWorkbook } from "../src/data/sportsline.js";
@@ -26,6 +28,13 @@ describe("CBS allowlist", () => {
     expect(isAllowedFixtureUrl("https://allfam.football.cbssports.com/draft")).toBe(false);
     expect(isAllowedCbsUrl("http://127.0.0.1:9/fixture-draft-room")).toBe(false);
     expect(leagueOrigin("allfam.football.cbssports.com")).toBe("https://allfam.football.cbssports.com/");
+    expect(leagueStartUrl("allfam.football.cbssports.com")).toBe("https://allfam.football.cbssports.com/");
+    expect(leagueStartUrl("allfam.football.cbssports.com/draft/live/room2")).toBe(
+      "https://allfam.football.cbssports.com/draft/live/room2"
+    );
+    expect(leagueStartUrl("https://allfam.football.cbssports.com/draft/live/room2/")).toBe(
+      "https://allfam.football.cbssports.com/draft/live/room2"
+    );
   });
 
   it("treats league feed as logged-in CBS but not a draft room", () => {
@@ -84,6 +93,8 @@ describe("CBS parse helpers", () => {
     expect(parseClockSeconds("00:47")).toBe(47);
     expect(parseClockSeconds("1:05")).toBe(65);
     expect(parseClockSeconds("25:22:34:52")).toBe(25 * 3600 + 22 * 60 + 34);
+    expect(parseClockSeconds("1:01:45:30")).toBe(1 * 86400 + 1 * 3600 + 45 * 60 + 30);
+    expect(formatClockDuration(1 * 86400 + 1 * 3600 + 45 * 60 + 30)).toBe("1 day 1 hour 45 minutes");
     expect(formatClockSeconds(25 * 3600 + 22 * 60 + 23)).toBe("25:22:23");
     expect(formatOnClockStatus("Waiting for Start", false)).toBe("draft has not started");
     expect(formatOnClockStatus("Pickens My Jeanty", true)).toBe("Pickens My Jeanty is the user");
@@ -91,6 +102,25 @@ describe("CBS parse helpers", () => {
     expect(interpretYouAreUp("YOU ARE UP IN 2 PICKS")).toBe(false);
     expect(interpretYouAreUp("YOU ARE UP")).toBe(true);
     expect(interpretYouAreUp("Waiting for Start")).toBe(false);
+  });
+
+  it("reads CBS team-list labels and pick-interval copy without using config order", () => {
+    expect(parseTeamLabels([
+      { text: "YOU ARE UP IN 2 PICKS" },
+      { alt: "Hairy Butterscotch", title: "Hairy Butterscotch" },
+      { title: "Gibbs me a win" },
+      { alt: "Y" },
+      { title: "Pickens My Jeanty (Jack Oien)" }
+    ])).toEqual(["Hairy Butterscotch", "Gibbs me a win", "Pickens My Jeanty"]);
+    expect(ownerFromDraftOrder(["A", "B", "C", "D"], 5, 4)).toBe("D");
+    expect(parsePickIntervalSeconds("Time Between Picks: 1:30")).toBe(90);
+    expect(parsePickIntervalSeconds("90 seconds between picks")).toBe(90);
+    expect(extractPickIntervalRaw("Draft Room Time Between Picks: 1:30 TURN ON AUTOPILOT")).toMatch(/Time Between Picks: 1:30/i);
+    expect(formatPickInterval(90)).toBe("1 minute 30 seconds between picks");
+    expect(mergeDraftOrder(
+      ["Yo Mama", "Clyde", "Pickens My Jeanty"],
+      ["Pickens My Jeanty", "Gronk if youre horny", "Dezzie Does Dallas"]
+    )).toEqual(["Yo Mama", "Clyde", "Pickens My Jeanty", "Gronk if youre horny", "Dezzie Does Dallas"]);
   });
 });
 

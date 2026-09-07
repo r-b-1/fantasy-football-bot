@@ -15,7 +15,7 @@ import {
   DEFAULT_CBS_MOCK_DRAFT_URL,
   isAllInTheFamilyHost,
   isAllowedCbsUrl,
-  leagueOrigin,
+  leagueStartUrl,
   looksLikeCbsDraftRoom
 } from "./allowlist.js";
 import { CbsError } from "./errors.js";
@@ -133,7 +133,7 @@ export async function runCbsRecommend(options: LiveRecommendOptions = {}): Promi
   const startUrl =
     options.startUrl ??
     process.env.CBS_DRAFT_START_URL ??
-    leagueOrigin(selectors.draftRoomUrlPattern);
+    leagueStartUrl(selectors.draftRoomUrlPattern);
   if (!isAllowedCbsUrl(startUrl)) {
     console.error(`Refusing non-CBS start URL: ${startUrl}`);
     process.exitCode = 2;

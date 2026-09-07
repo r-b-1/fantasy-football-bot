@@ -14,6 +14,7 @@ beforeAll(async () => {
   browser = await chromium.launch();
 });
 beforeEach(async () => {
+  await fetch(`${origin}/api/room/disconnect`, { method: "POST" });
   const reset = await fetch(`${origin}/api/reset`, { method: "POST" });
   expect(reset.status).toBe(200);
   page = await browser.newPage({ viewport: { width: 1440, height: 1050 }, hasTouch: true });
@@ -32,7 +33,7 @@ afterEach(async () => {
 });
 afterAll(async () => {
   await browser.close();
-  server.close();
+  await server.stop();
 });
 
 async function waitForPick(pick: number) {
@@ -142,6 +143,33 @@ it("blocks duplicate submissions and recovers from stale state without recording
   await waitForPick(3);
   expect(await page.locator("#historyCount").textContent()).toBe("2");
 }, 30000);
+
+it("watches the local draft room, locks recording, then lets a manual pick continue after disconnect", async () => {
+  expect(await page.locator("#watchLiveBtn").isHidden()).toBe(true);
+  expect(await page.locator("#roomLabelText").textContent()).toBe("Manual companion");
+  await page.getByRole("button", { name: "Watch local room" }).click();
+  await page.waitForFunction(() =>
+    document.querySelector("#roomLabelText")?.textContent === "Watching local draft room" &&
+    document.querySelector<HTMLInputElement>("#playerSearch")?.disabled === true, null, { timeout: 30000 });
+  await page.waitForFunction(() => Number(document.querySelector("#historyCount")?.textContent) >= 2, null, { timeout: 20000 });
+  expect(await page.locator("#historyList").textContent()).toContain("Josh Jacobs");
+  expect(await page.locator("#draftOrderLabel").textContent()).toBe("CBS draft order");
+  expect(await page.locator("#draftOrder").textContent()).toContain("Spider Monkeys");
+  expect(await page.locator("#draftOrderNote").textContent()).toMatch(/snake/i);
+  expect(await page.locator("#pickInterval").textContent()).toContain("between picks");
+  expect(await page.locator("#submitPick").isDisabled()).toBe(true);
+  await page.getByRole("button", { name: "Disconnect" }).click();
+  await page.waitForFunction(() =>
+    document.querySelector("#roomLabelText")?.textContent === "Manual companion" &&
+    !document.querySelector<HTMLInputElement>("#playerSearch")?.disabled, null, { timeout: 15000 });
+  const remaining = Number(await page.locator("#historyCount").textContent());
+  expect(remaining).toBeGreaterThanOrEqual(2);
+  await page.locator("#playerSearch").fill("nico");
+  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: "Record pick", exact: false }).click();
+  await waitForPick(remaining + 2);
+  expect(await page.locator("#historyList").textContent()).toContain("Nico Collins");
+}, 60000);
 
 it("keeps manual recording usable when recommendation loading fails", async () => {
   await page.route("**/api/recommend", (route) => route.fulfill({

@@ -50,6 +50,16 @@ export function leagueOrigin(draftRoomUrlPattern: string): string {
   return `https://${host}/`;
 }
 
+/** Full configured CBS start URL. Host-only patterns stay on the origin; a path opens that room. */
+export function leagueStartUrl(draftRoomUrlPattern: string): string {
+  const trimmed = draftRoomUrlPattern.trim().replace(/^https?:\/\//, "");
+  const host = trimmed.split("/")[0] ?? "";
+  if (!host) throw new Error("CBS draft room URL pattern is empty.");
+  const path = trimmed.slice(host.length).replace(/\/+$/, "");
+  if (!path) return `https://${host}/`;
+  return `https://${host}${path}`;
+}
+
 export const DEFAULT_CBS_MOCK_DRAFT_URL = "https://mockdraft.football.cbssports.com/";
 
 export function looksLikeCbsMockDraftLobby(url: string): boolean {
