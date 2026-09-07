@@ -17,6 +17,7 @@ export interface ProjectOptionConfig {
   intervalMs?: number;
   useAI?: boolean;
   untilPick?: number;
+  pauseOnUser?: boolean;
 }
 
 export async function runFixtureProjection(options: ProjectOptionConfig = {}): Promise<void> {
@@ -38,6 +39,7 @@ export async function runFixtureProjection(options: ProjectOptionConfig = {}): P
   const server = await startFixtureServer();
   const query = new URLSearchParams({ autoplay: "1", intervalMs: String(intervalMs) });
   if (untilPick > 0) query.set("untilPick", String(untilPick));
+  if (options.pauseOnUser === false) query.set("pauseOnUser", "0");
 
   const session = await openEphemeralBrowser(options.headless ?? false);
   const projectedPicks = new Set<number>();

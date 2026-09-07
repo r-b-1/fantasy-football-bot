@@ -166,6 +166,7 @@ async function main(): Promise<void> {
     await runFixtureProjection({
       headless: process.argv.includes("--headless"),
       useAI: !process.argv.includes("--no-ai"),
+      pauseOnUser: !process.argv.includes("--no-pause-on-user") ? undefined : false,
       untilPick: Number(process.env.FIXTURE_UNTIL_PICK ?? "0")
     });
     return;
