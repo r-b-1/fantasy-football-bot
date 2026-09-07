@@ -1,12 +1,11 @@
-import { chooseWithAI, defaultAIOptions } from "../ai/openrouter.js";
 import { loadLeagueConfig, loadStrategyConfig } from "../config/load.js";
 import { loadDraftFixture } from "../data/fixture.js";
 import { loadSportslineWorkbook } from "../data/sportsline.js";
-import { deterministicDecision } from "../engine/decision.js";
-import { generateShortlist } from "../engine/shortlist.js";
-import { buildDraftStateFromFixture } from "../engine/state.js";
-import { appendEvent } from "../state/eventLog.js";
-import { formatRecommendation } from "./format.js";
+import type { LivePlayer } from "../domain/types.js";
+import { predictNextPicks } from "../ai/predict.js";
+import { formatProjection } from "./format.js";
+import { recommendTurn } from "../engine/recommend.js";
+import { buildDraftStateFromFixture, toLivePlayers } from "../engine/state.js";
 
 export interface RankFixtureOptions {
   fixturePath: string;
@@ -22,40 +21,42 @@ export async function rankFixture(options: RankFixtureOptions): Promise<string> 
   const strategy = loadStrategyConfig(options.strategyPath);
   const players = loadSportslineWorkbook(options.sportslinePath);
   const fixture = loadDraftFixture(options.fixturePath);
-  const { state, livePlayers } = buildDraftStateFromFixture(players, fixture, league, strategy);
-  const ranked = generateShortlist(livePlayers, state, league, strategy);
-  const decision = options.useAI
-    ? await chooseWithAI(ranked, state, league, strategy, defaultAIOptions(strategy))
-    : deterministicDecision(ranked);
+  const { state } = buildDraftStateFromFixture(players, fixture, league, strategy);
+  const result = await recommendTurn({
+    players,
+    state,
+    league,
+    strategy,
+    useAI: options.useAI,
+    eventLogPath: options.eventLogPath,
+    explain: "all"
+  });
+  return result.output;
+}
 
-  if (options.eventLogPath) {
-    appendEvent(options.eventLogPath, {
-      type: "shortlist",
-      overallPick: state.currentOverallPick,
-      candidateIds: ranked.map((candidate) => candidate.player.id)
-    });
-    const selected =
-      ranked.find((candidate) => candidate.player.id === decision.selectedCandidateId) ?? ranked[0]!;
-    appendEvent(options.eventLogPath, {
-      type: "recommendation",
-      overallPick: state.currentOverallPick,
-      candidateId: decision.selectedCandidateId,
-      playerName: selected.player.name,
-      score: selected.score,
-      notes: selected.notes
-    });
-    if (options.useAI) {
-      appendEvent(options.eventLogPath, {
-        type: "ai_decision",
-        overallPick: state.currentOverallPick,
-        candidateId: decision.selectedCandidateId,
-        confidence: decision.confidence,
-        source: decision.source,
-        latencyMs: decision.latencyMs,
-        fallbackReason: decision.fallbackReason
-      });
-    }
-  }
+export interface PredictFixtureOptions {
+  fixturePath: string;
+  leaguePath: string;
+  strategyPath: string;
+  sportslinePath: string;
+  useAI?: boolean;
+  horizon?: number;
+}
 
-  return formatRecommendation(ranked, state, league, decision);
+export async function predictFixture(options: PredictFixtureOptions): Promise<string> {
+  const league = loadLeagueConfig(options.leaguePath);
+  const strategy = loadStrategyConfig(options.strategyPath);
+  const players = loadSportslineWorkbook(options.sportslinePath);
+  const fixture = loadDraftFixture(options.fixturePath);
+  const { state } = buildDraftStateFromFixture(players, fixture, league, strategy);
+  const livePlayers: LivePlayer[] = toLivePlayers(players, new Set());
+  const projection = await predictNextPicks({
+    players: livePlayers,
+    state,
+    league,
+    strategy,
+    useAI: options.useAI,
+    horizon: options.horizon
+  });
+  return formatProjection(projection);
 }

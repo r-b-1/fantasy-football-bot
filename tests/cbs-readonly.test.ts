@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  DEFAULT_CBS_MOCK_DRAFT_URL,
+  isAllInTheFamilyHost,
   isAllowedCbsUrl,
   isAllowedFixtureUrl,
   leagueOrigin,
   looksLikeCbsDraftRoom,
+  looksLikeCbsMockDraftLobby,
   pickDraftRoomUrl
 } from "../src/cbs/allowlist.js";
 import { detectConfigConflicts } from "../src/cbs/conflicts.js";
@@ -12,7 +15,7 @@ import { parseClockSeconds, parseOverallPick, parseOverallPickLenient, interpret
 import { resyncFromDraftResults } from "../src/cbs/resync.js";
 import { loadLeagueConfig } from "../src/config/load.js";
 import { loadSportslineWorkbook } from "../src/data/sportsline.js";
-import { loadSelectorConfig, requiredReadSelectors } from "../src/cbs/selectors.js";
+import { loadSelectorConfig, requiredReadSelectors, resolveSelectorConfigPath } from "../src/cbs/selectors.js";
 
 describe("CBS allowlist", () => {
   it("allows CBS sports hosts and rejects others", () => {
@@ -31,6 +34,12 @@ describe("CBS allowlist", () => {
     ).toBe(false);
     expect(looksLikeCbsDraftRoom("https://allfam.football.cbssports.com/draft/live/room2")).toBe(true);
     expect(looksLikeCbsDraftRoom("https://mockdraft-1.football.cbssports.com/mockdraft/standard")).toBe(true);
+    expect(looksLikeCbsMockDraftLobby(DEFAULT_CBS_MOCK_DRAFT_URL)).toBe(true);
+    expect(looksLikeCbsDraftRoom(DEFAULT_CBS_MOCK_DRAFT_URL)).toBe(false);
+    expect(isAllInTheFamilyHost("https://allfam.football.cbssports.com/draft/live/room2")).toBe(true);
+    expect(isAllInTheFamilyHost("https://mockdraft-1.football.cbssports.com/mockdraft/standard")).toBe(
+      false
+    );
     expect(looksLikeCbsDraftRoom("https://allfam.football.cbssports.com/draft-central/draft-research")).toBe(
       false
     );
@@ -44,6 +53,12 @@ describe("CBS allowlist", () => {
       ])
     ).toBe("https://allfam.football.cbssports.com/draft/live/room2");
     expect(pickDraftRoomUrl(["https://allfam.football.cbssports.com/"])).toBeNull();
+    expect(
+      pickDraftRoomUrl([
+        DEFAULT_CBS_MOCK_DRAFT_URL,
+        "https://mockdraft-1.football.cbssports.com/mockdraft/standard"
+      ])
+    ).toBe("https://mockdraft-1.football.cbssports.com/mockdraft/standard");
     expect(
       pickDraftRoomUrl(
         [
@@ -138,6 +153,19 @@ describe("selector config", () => {
     expect(config.status.startsWith("UNCONFIGURED")).toBe(true);
     expect(config.kind).toBe("live");
     expect(requiredReadSelectors(config).length).toBeGreaterThan(0);
+  });
+
+  it("falls back to committed locators when SELECTOR_CONFIG points at a missing file", () => {
+    const previous = process.env.SELECTOR_CONFIG;
+    process.env.SELECTOR_CONFIG = "config/missing-selectors-for-test.json";
+    try {
+      const resolved = resolveSelectorConfigPath();
+      expect(resolved).toMatch(/config\/selectors\.(local|live)\.json$/);
+      expect(resolved).not.toBe("config/missing-selectors-for-test.json");
+    } finally {
+      if (previous == null) delete process.env.SELECTOR_CONFIG;
+      else process.env.SELECTOR_CONFIG = previous;
+    }
   });
 
   it("loads live room2 locators captured from the real draft room", () => {

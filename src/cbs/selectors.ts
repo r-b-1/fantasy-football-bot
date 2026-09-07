@@ -30,14 +30,30 @@ const SelectorConfigSchema = z.object({
 export type SelectorConfig = z.infer<typeof SelectorConfigSchema>;
 
 export function loadSelectorConfig(path: string): SelectorConfig {
+  if (!fs.existsSync(path)) {
+    throw new Error(
+      `CBS selector config not found at ${path}. Use config/selectors.live.json, or copy it to config/selectors.local.json after diagnose.`
+    );
+  }
   return SelectorConfigSchema.parse(JSON.parse(fs.readFileSync(path, "utf8")));
 }
 
+const DEFAULT_SELECTOR_PATHS = [
+  "config/selectors.local.json",
+  "config/selectors.live.json",
+  "config/selectors.example.json"
+];
+
 export function resolveSelectorConfigPath(): string {
-  if (process.env.SELECTOR_CONFIG) return process.env.SELECTOR_CONFIG;
-  if (fs.existsSync("config/selectors.local.json")) return "config/selectors.local.json";
-  if (fs.existsSync("config/selectors.live.json")) return "config/selectors.live.json";
-  return "config/selectors.example.json";
+  const candidates = [process.env.SELECTOR_CONFIG, ...DEFAULT_SELECTOR_PATHS].filter(
+    (path): path is string => Boolean(path && path.trim())
+  );
+  for (const path of candidates) {
+    if (fs.existsSync(path)) return path;
+  }
+  throw new Error(
+    "No CBS selector config found. Expected config/selectors.live.json in the repo."
+  );
 }
 
 export function assertSelectorsConfigured(config: SelectorConfig): void {
@@ -62,17 +78,18 @@ export function assertFixtureSelectorConfig(config: SelectorConfig): void {
   }
 }
 
+export const REQUIRED_READ_SELECTOR_FIELDS = [
+  "currentPick",
+  "teamOnClock",
+  "youAreUpIndicator",
+  "draftResultRows",
+  "draftResultPickWithinRow",
+  "draftResultTeamWithinRow",
+  "draftResultPlayerWithinRow"
+] as const satisfies ReadonlyArray<keyof SelectorConfig["selectors"]>;
+
 export function requiredReadSelectors(config: SelectorConfig): string[] {
-  const required: Array<keyof SelectorConfig["selectors"]> = [
-    "currentPick",
-    "teamOnClock",
-    "youAreUpIndicator",
-    "draftResultRows",
-    "draftResultPickWithinRow",
-    "draftResultTeamWithinRow",
-    "draftResultPlayerWithinRow"
-  ];
-  return required.filter((field) => !config.selectors[field]);
+  return REQUIRED_READ_SELECTOR_FIELDS.filter((field) => !config.selectors[field]);
 }
 
 export function allSelectorFields(config: SelectorConfig): Array<[string, string | null]> {

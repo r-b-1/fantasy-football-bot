@@ -50,6 +50,7 @@ export const LeagueConfigSchema = z.object({
   }),
   executionMode: z.enum(["monitor", "recommend", "confirm", "autopilot"]),
   cbsExecutionEnabled: z.boolean(),
+  inferUserTeamFromYouAreUp: z.boolean().default(false),
   notes: z.array(z.string())
 });
 

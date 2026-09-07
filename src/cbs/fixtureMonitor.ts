@@ -1,8 +1,6 @@
 import { loadLeagueConfig, loadStrategyConfig } from "../config/load.js";
 import { loadSportslineWorkbook } from "../data/sportsline.js";
-import { deterministicDecision } from "../engine/decision.js";
-import { generateShortlist } from "../engine/shortlist.js";
-import { formatRecommendation } from "../cli/format.js";
+import { recommendTurn } from "../engine/recommend.js";
 import { isAllowedCbsUrl } from "./allowlist.js";
 import { startFixtureServer } from "./fixtureServer.js";
 import { CBSReader } from "./reader.js";
@@ -71,18 +69,15 @@ export async function runFixtureMonitor(options: FixtureMonitorOptions = {}): Pr
         const pick = snapshot.control.currentOverallPick;
         if (!seenUserTurns.has(pick)) {
           seenUserTurns.add(pick);
-          const state = await reader.readDraftState(players);
-          const ranked = generateShortlist(
-            players.map((player) => ({
-              ...player,
-              available: state.availablePlayerIds.has(player.id)
-            })),
+          const state = await reader.readDraftState(players, { recentPickWindow: strategy.recentPickWindow });
+          const decision = await recommendTurn({
+            players,
             state,
             league,
-            strategy
-          );
-          const decision = deterministicDecision(ranked);
-          console.log(formatRecommendation(ranked, state, league, decision, { explain: "top" }));
+            strategy,
+            explain: "top"
+          });
+          console.log(decision.output);
         }
       }
 

@@ -7,6 +7,15 @@ import type { DraftState, LivePlayer } from "../src/domain/types.js";
 const league = loadLeagueConfig("config/league.current.json");
 const strategy = loadStrategyConfig("config/strategy.current.json");
 
+function modelReturning(parsed: unknown, delayMs = 0): ProjectionModel {
+  return {
+    async parse() {
+      if (delayMs > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));
+      return parsed;
+    }
+  };
+}
+
 function player(overrides: Partial<LivePlayer> & Pick<LivePlayer, "id" | "name" | "position">): LivePlayer {
   return {
     sourceName: overrides.name,
@@ -84,15 +93,6 @@ describe("deterministic projection", () => {
 });
 
 describe("AI projection layer", () => {
-  function modelReturning(parsed: unknown, delayMs = 0): ProjectionModel {
-    return {
-      async parse() {
-        if (delayMs > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));
-        return parsed;
-      }
-    };
-  }
-
   const pool = [
     player({ id: "wr1::WR", name: "WR One", position: "WR", adp: 22 }),
     player({ id: "rb1::RB", name: "RB One", position: "RB", adp: 24 }),
@@ -183,7 +183,7 @@ describe("AI projection layer", () => {
       model: modelReturning({ nope: true })
     });
     expect(result.source).toBe("deterministic");
-    expect(result.fallbackReason).toMatch(/invalid structured output/);
+    expect(result.fallbackReason).toMatch(/no projected picks|invalid structured output/);
   });
 
   it("rejects duplicate projected players", async () => {
@@ -203,5 +203,58 @@ describe("AI projection layer", () => {
     });
     expect(result.source).toBe("deterministic");
     expect(result.fallbackReason).toMatch(/duplicate/);
+  });
+});
+
+describe("--no-ai CLI semantics for projection", () => {
+  const pool = [
+    player({ id: "wr1::WR", name: "WR One", position: "WR", adp: 22 }),
+    player({ id: "rb1::RB", name: "RB One", position: "RB", adp: 24 }),
+    player({ id: "wr2::WR", name: "WR Two", position: "WR", adp: 26 })
+  ];
+  const current = state({
+    currentOverallPick: 21,
+    availablePlayerIds: new Set(pool.map((p) => p.id))
+  });
+
+  it("with useAI=false, returns deterministic projection even if a key is set", async () => {
+    const result = await predictNextPicks({
+      players: pool,
+      state: current,
+      league,
+      strategy,
+      useAI: false,
+      apiKey: "sk-or-v1-fake-key"
+    });
+    expect(result.source).toBe("deterministic");
+    expect(result.fallbackReason).toMatch(/AI disabled/);
+    expect(result.projectedPicks[0]!.playerId).toBe("wr1::WR");
+  });
+
+  it("with useAI=true but no api key and no model, returns deterministic", async () => {
+    const result = await predictNextPicks({
+      players: pool,
+      state: current,
+      league,
+      strategy,
+      useAI: true,
+      apiKey: null
+    });
+    expect(result.source).toBe("deterministic");
+    expect(result.fallbackReason).toMatch(/OPENROUTER_API_KEY/);
+  });
+
+  it("with useAI=true and a fake key, the model will be created and called (here we pass an explicit model that returns empty)", async () => {
+    const result = await predictNextPicks({
+      players: pool,
+      state: current,
+      league,
+      strategy,
+      useAI: true,
+      apiKey: "sk-or-v1-fake-key",
+      model: modelReturning({ picks: [], rationale: "" })
+    });
+    expect(result.source).toBe("deterministic");
+    expect(result.fallbackReason).toMatch(/invalid structured output|no projected picks/);
   });
 });

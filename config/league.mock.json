@@ -1,0 +1,37 @@
+{
+  "platform": "CBS",
+  "season": 2026,
+  "leagueName": "CBS public mock draft",
+  "userTeamName": "LIVE_ROOM",
+  "fantasyDisplayName": "LIVE_ROOM",
+  "teamCount": 12,
+  "scoringFormat": "PPR",
+  "draftType": "snake",
+  "draftTypeVerificationRequired": true,
+  "draftSlot": 1,
+  "keeperSlots": 0,
+  "keepers": [],
+  "completedTrades": [],
+  "knownOverallPicks": [],
+  "knownPicksArePartial": true,
+  "lineup": {
+    "QB": 1,
+    "RB": 2,
+    "WR": 3,
+    "TE": 1,
+    "K": 1,
+    "DST": 1
+  },
+  "benchSlots": 6,
+  "rosterMaximums": {},
+  "executionMode": "recommend",
+  "cbsExecutionEnabled": false,
+  "inferUserTeamFromYouAreUp": true,
+  "notes": [
+    "Use only with a public CBS mock, never the All in the Family draft room.",
+    "Join a 12-team PPR Standard mock so the SportsLine CBS PPR 12-team sheet is a reasonable fit.",
+    "No keepers: Jeanty and Pickens are available in public mocks.",
+    "userTeamName and snake pick inventory are locked from the first YOU ARE UP snapshot.",
+    "This command never clicks Join, Draft, or Autopilot. You pick in CBS yourself."
+  ]
+}

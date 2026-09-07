@@ -1,0 +1,302 @@
+import type { Page } from "playwright";
+import { loadLeagueConfig, loadStrategyConfig } from "../config/load.js";
+import { loadSportslineWorkbook } from "../data/sportsline.js";
+import type { LeagueConfig, SportslinePlayer, StrategyConfig } from "../domain/types.js";
+import { applyLiveTurnIdentity } from "../engine/state.js";
+import { recommendTurn, shouldRecommendForTurn } from "../engine/recommend.js";
+import { appendEvent } from "../state/eventLog.js";
+import {
+  DEFAULT_CBS_MOCK_DRAFT_URL,
+  isAllInTheFamilyHost,
+  isAllowedCbsUrl,
+  leagueOrigin,
+  looksLikeCbsDraftRoom
+} from "./allowlist.js";
+import { CbsError } from "./errors.js";
+import { probeSelector } from "./locators.js";
+import { formatClockSeconds, formatOnClockStatus } from "./parse.js";
+import { CBSReader } from "./reader.js";
+import { resyncFromDraftResults } from "./resync.js";
+import {
+  assertLiveSelectorConfig,
+  loadSelectorConfig,
+  requiredReadSelectors,
+  resolveSelectorConfigPath,
+  type SelectorConfig
+} from "./selectors.js";
+import { openLoggedInDraftRoom } from "./session.js";
+
+export interface LiveRecommendOptions {
+  useAI?: boolean;
+  startUrl?: string;
+  leaguePath?: string;
+  refuseLeagueRoom?: boolean;
+  prompt?: string;
+  preferredPattern?: string;
+}
+
+function mockJoinPrompt(): string {
+  return [
+    "Log into CBS in the Chrome window if needed.",
+    "Join a 12-team PPR Standard mock yourself (Join Now). This program will not click Join, Draft, or Autopilot.",
+    "Do not open or use the All in the Family draft room.",
+    "When the mock draft room is open (pick/clock visible), press Enter here.\n"
+  ].join("\n");
+}
+
+function leagueRecommendPrompt(): string {
+  return [
+    "Click Draft Room even if it opens a new window (not Draft Central / Draft Research).",
+    "This is recommend mode: no clicks will be performed.",
+    "When pick/clock are visible, press Enter here.\n"
+  ].join(" ");
+}
+
+const STARTUP_READ_FIELDS = [
+  "currentPick",
+  "teamOnClock",
+  "youAreUpIndicator"
+] as const;
+
+async function unresolvedStartupSelectors(page: Page, selectors: SelectorConfig): Promise<string[]> {
+  const missing = requiredReadSelectors(selectors);
+  if (missing.length > 0) return missing;
+  const unresolved: string[] = [];
+  for (const field of STARTUP_READ_FIELDS) {
+    const probe = await probeSelector(page, field, selectors.selectors[field]);
+    if (!probe.resolved) unresolved.push(field);
+  }
+  return unresolved;
+}
+
+async function waitUntilSelectorsResolve(page: Page, selectors: SelectorConfig): Promise<void> {
+  const deadline = Date.now() + 60_000;
+  let last = await unresolvedStartupSelectors(page, selectors);
+  while (last.length > 0 && Date.now() < deadline) {
+    await page.waitForTimeout(2000);
+    last = await unresolvedStartupSelectors(page, selectors);
+  }
+  if (last.length > 0) {
+    throw new Error(
+      `Required CBS read locators missed the page (${last.join(", ")}). Run \`npm run cbs:diagnose\` or \`npm run cbs:diagnose -- --mock\` in this room. Do not guess selectors.`
+    );
+  }
+}
+
+export async function runCbsRecommend(options: LiveRecommendOptions = {}): Promise<void> {
+  const selectorPath = resolveSelectorConfigPath();
+  const leaguePath =
+    options.leaguePath ?? process.env.LEAGUE_CONFIG ?? "config/league.current.json";
+  const league = loadLeagueConfig(leaguePath);
+  const strategy = loadStrategyConfig(process.env.STRATEGY_CONFIG ?? "config/strategy.current.json");
+  console.log(`Selector config: ${selectorPath}`);
+  const selectors = loadSelectorConfig(selectorPath);
+  const players = loadSportslineWorkbook(
+    process.env.SPORTSLINE_XLSX ?? "data/reference/cheatsheet_cbsppr12.xlsx"
+  );
+  const useAI = options.useAI ?? true;
+
+  try {
+    assertLiveSelectorConfig(selectors);
+    if (requiredReadSelectors(selectors).length > 0) {
+      throw new Error("CBS read selectors are not configured.");
+    }
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : error);
+    console.error("Run `npm run cbs:diagnose` in the logged-in draft room first. Do not guess selectors.");
+    process.exitCode = 2;
+    return;
+  }
+
+  if (league.cbsExecutionEnabled) {
+    console.error("Recommend/mock mode refuses a config with cbsExecutionEnabled=true.");
+    process.exitCode = 2;
+    return;
+  }
+  if (league.executionMode === "autopilot" || league.executionMode === "confirm") {
+    console.error(`Recommend/mock mode refuses executionMode=${league.executionMode}. Use recommend.`);
+    process.exitCode = 2;
+    return;
+  }
+
+  const startUrl =
+    options.startUrl ??
+    process.env.CBS_DRAFT_START_URL ??
+    leagueOrigin(selectors.draftRoomUrlPattern);
+  if (!isAllowedCbsUrl(startUrl)) {
+    console.error(`Refusing non-CBS start URL: ${startUrl}`);
+    process.exitCode = 2;
+    return;
+  }
+
+  const profileDir = process.env.CBS_BROWSER_PROFILE_DIR ?? ".local/cbs-browser-profile";
+  const eventLogPath = process.env.EVENT_LOG;
+  const refuseLeagueRoom = options.refuseLeagueRoom ?? false;
+  const { session, focused } = await openLoggedInDraftRoom({
+    profileDir,
+    startUrl,
+    preferredPattern: options.preferredPattern ?? (refuseLeagueRoom ? undefined : selectors.draftRoomUrlPattern),
+    prompt: options.prompt ?? (refuseLeagueRoom ? mockJoinPrompt() : leagueRecommendPrompt())
+  });
+
+  try {
+    console.log(`Open windows (${focused.urls.length}):`);
+    for (const openUrl of focused.urls) console.log(`  ${openUrl}`);
+    console.log(`Using: ${focused.page.url()}`);
+
+    if (refuseLeagueRoom && isAllInTheFamilyHost(focused.page.url())) {
+      throw new Error(
+        "Mock recommend refused the real All in the Family room. Join a public CBS mock instead."
+      );
+    }
+    if (!looksLikeCbsDraftRoom(focused.page.url())) {
+      throw new Error(
+        refuseLeagueRoom
+          ? "Mock recommend did not find a CBS mock draft room. Join a mock, leave that window open, then press Enter."
+          : "Recommend did not find the live Draft Room popup. Open Draft → Draft Room and leave that window open."
+      );
+    }
+
+    await waitUntilSelectorsResolve(focused.page, selectors);
+    console.log(
+      `RECOMMEND MODE — no clicks. ${useAI ? "OpenAI will rank the shortlist when a key is present." : "Deterministic engine only."}`
+    );
+    console.log("Ctrl+C to stop. You must make the pick in CBS yourself.");
+
+    await runRecommendPollLoop({
+      page: focused.page,
+      selectors,
+      league,
+      strategy,
+      players,
+      useAI,
+      eventLogPath,
+      refuseLeagueRoom
+    });
+  } finally {
+    await session.context.close();
+  }
+}
+
+export async function runCbsMockDraft(options: { useAI?: boolean } = {}): Promise<void> {
+  await runCbsRecommend({
+    useAI: options.useAI ?? true,
+    startUrl: process.env.CBS_MOCK_DRAFT_URL ?? DEFAULT_CBS_MOCK_DRAFT_URL,
+    leaguePath: process.env.CBS_MOCK_LEAGUE_CONFIG ?? "config/league.mock.json",
+    refuseLeagueRoom: true,
+    prompt: mockJoinPrompt()
+  });
+}
+
+export async function runRecommendPollLoop(args: {
+  page: Page;
+  selectors: SelectorConfig;
+  league: LeagueConfig;
+  strategy: StrategyConfig;
+  players: SportslinePlayer[];
+  useAI: boolean;
+  eventLogPath?: string;
+  refuseLeagueRoom?: boolean;
+  intervalMs?: number;
+  untilPick?: number;
+  onRecommendation?: (overallPick: number) => void;
+}): Promise<void> {
+  const reader = new CBSReader(args.page, args.selectors, args.league);
+  let league = args.league;
+  const seenPicks = new Set<number>();
+  const recommendedTurns = new Set<number>();
+
+  for (;;) {
+    if (args.refuseLeagueRoom && isAllInTheFamilyHost(args.page.url())) {
+      throw new Error("Mock recommend saw the All in the Family host and stopped.");
+    }
+
+    let snapshot;
+    try {
+      snapshot = await reader.readLiveSnapshot(args.players);
+    } catch (error) {
+      if (
+        error instanceof CbsError &&
+        (error.kind === "selector_unresolved" || error.kind === "parse_failed")
+      ) {
+        console.log(`Waiting for draft widgets... ${error.message}`);
+        await args.page.waitForTimeout(args.intervalMs ?? 2000);
+        continue;
+      }
+      throw error;
+    }
+
+    const locked = applyLiveTurnIdentity(league, {
+      youAreUp: snapshot.control.youAreUp,
+      teamOnClock: snapshot.control.teamOnClock,
+      currentOverallPick: snapshot.control.currentOverallPick
+    });
+    if (locked.userTeamName !== league.userTeamName || locked.draftSlot !== league.draftSlot) {
+      console.log(
+        `Locked live identity: team="${locked.userTeamName}" slot=${locked.draftSlot} picks=${locked.knownOverallPicks.slice(0, 6).join(",")}${locked.knownOverallPicks.length > 6 ? ",..." : ""}`
+      );
+      league = locked;
+      reader.updateLeague(league);
+    }
+
+    console.log(
+      `RECOMMEND  PICK ${snapshot.control.currentOverallPick ?? "?"} — ${formatOnClockStatus(
+        snapshot.control.teamOnClock,
+        snapshot.control.isUserTurn
+      )} — ${formatClockSeconds(snapshot.control.clockSecondsRemaining)}`
+    );
+    for (const result of snapshot.results.slice(-5)) {
+      console.log(`  ${result.overallPick}. ${result.fantasyTeam} — ${result.playerName}`);
+    }
+    for (const conflict of snapshot.conflicts) {
+      console.log(`  CONFLICT: ${conflict}`);
+    }
+
+    if (args.eventLogPath) {
+      const resync = resyncFromDraftResults([], snapshot.results, args.players, snapshot.capturedAt);
+      for (const event of resync.events) {
+        if (seenPicks.has(event.overallPick)) continue;
+        appendEvent(args.eventLogPath, {
+          type: "draft_pick_seen",
+          overallPick: event.overallPick,
+          team: event.fantasyTeam,
+          playerId: event.playerId,
+          playerName: event.playerName,
+          position: event.position
+        });
+        seenPicks.add(event.overallPick);
+      }
+    }
+
+    const turn = shouldRecommendForTurn(
+      snapshot.control.isUserTurn,
+      snapshot.control.currentOverallPick,
+      recommendedTurns
+    );
+    if (turn != null) {
+      if (args.eventLogPath) {
+        appendEvent(args.eventLogPath, { type: "our_turn", overallPick: turn });
+      }
+      const state = await reader.readDraftState(args.players, {
+        recentPickWindow: args.strategy.recentPickWindow
+      });
+      const result = await recommendTurn({
+        players: args.players,
+        state,
+        league,
+        strategy: args.strategy,
+        useAI: args.useAI,
+        eventLogPath: args.eventLogPath
+      });
+      console.log(result.output);
+      recommendedTurns.add(turn);
+      args.onRecommendation?.(turn);
+    }
+
+    const current = snapshot.control.currentOverallPick ?? 0;
+    if (args.untilPick != null && current >= args.untilPick && !snapshot.control.isUserTurn) {
+      return;
+    }
+    await args.page.waitForTimeout(args.intervalMs ?? 2000);
+  }
+}

@@ -7,17 +7,35 @@ import { stripMarkdownFences } from "./parse.js";
 export const ProjectionModelSchema = z.object({
   picks: z
     .array(
-      z.object({
-        playerId: z.string().min(1),
-        playerName: z.string().min(1),
-        position: z.enum(POSITIONS),
-        expectedOverallPick: z.number().int().positive(),
-        confidence: z.number().min(0).max(1)
-      })
+      z
+        .object({
+          playerId: z.string().min(1),
+          playerName: z.string().min(1),
+          position: z.enum(POSITIONS),
+          expectedOverallPick: z.number().int().positive(),
+          confidence: z.number().min(0).max(1)
+        })
+        .passthrough()
     )
     .min(1)
-    .max(20),
-  rationale: z.string().max(400)
+    .max(20)
+    .optional(),
+  projectedPicks: z
+    .array(
+      z
+        .object({
+          playerId: z.string().min(1),
+          playerName: z.string().min(1),
+          position: z.enum(POSITIONS),
+          expectedOverallPick: z.number().int().positive(),
+          confidence: z.number().min(0).max(1).optional()
+        })
+        .passthrough()
+    )
+    .min(1)
+    .max(20)
+    .optional(),
+  rationale: z.string().max(400).optional()
 });
 
 export interface ProjectionAIOptions {
@@ -104,7 +122,15 @@ const SYSTEM_PROMPT = [
   "OUTPUT FORMAT — STRICT:",
   "Reply with a single JSON object and nothing else. No markdown. No code fences. No prose.",
   "The first character of your reply must be '{' and the last character must be '}'.",
-  "Do not wrap the JSON in any commentary before or after it."
+  "Do not wrap the JSON in any commentary before or after it.",
+  "",
+  "Required fields in the JSON:",
+  "  picks (array of objects)",
+  "  Each pick object must include: playerId (string), playerName (string), position (one of QB/RB/WR/TE/K/DST), expectedOverallPick (integer), confidence (number 0-1).",
+  "  You may include additional fields like 'team' or 'overallPick' — they will be ignored.",
+  "",
+  "Example minimal valid response:",
+  "{\"picks\":[{\"playerId\":\"puka nacua::WR\",\"playerName\":\"Puka Nacua\",\"position\":\"WR\",\"expectedOverallPick\":22,\"confidence\":0.81}]}"
 ].join("\n");
 
 export async function predictNextPicks(args: PredictArgs): Promise<ProjectionResult> {
@@ -244,9 +270,10 @@ function validateProjection(
   if (!result.success) {
     return { ok: false, reason: `invalid structured output: ${result.error.message}` };
   }
+  const rawPicks = result.data.picks ?? result.data.projectedPicks ?? [];
   const picks: ProjectedPick[] = [];
   const seen = new Set<string>();
-  for (const pick of result.data.picks.slice(0, horizon)) {
+  for (const pick of rawPicks.slice(0, horizon)) {
     if (!allowedIds.has(pick.playerId)) {
       return { ok: false, reason: `projected player ${pick.playerId} is not in the available pool` };
     }
@@ -261,12 +288,12 @@ function validateProjection(
       playerName,
       position,
       expectedOverallPick: pick.expectedOverallPick,
-      confidence: pick.confidence,
+      confidence: pick.confidence ?? 0.5,
       source: "ai"
     });
   }
   if (picks.length === 0) {
     return { ok: false, reason: "no projected picks returned" };
   }
-  return { ok: true, picks, rationale: result.data.rationale };
+  return { ok: true, picks, rationale: result.data.rationale ?? "" };
 }

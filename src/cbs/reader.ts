@@ -2,7 +2,7 @@ import type { Page } from "playwright";
 import type { DraftState, LeagueConfig, LivePlayer, SportslinePlayer } from "../domain/types.js";
 import { requirePlayer } from "../engine/identity.js";
 import { nextUserOverallPick, recentPositionCounts } from "../engine/state.js";
-import { assertAllowedCbsUrl, assertAllowedFixtureUrl } from "./allowlist.js";
+import { assertAllowedCbsUrl, assertAllowedFixtureUrl, hostnameOf, looksLikeCbsDraftRoom } from "./allowlist.js";
 import { selectorsUnconfigured } from "./errors.js";
 import { isVisible, readAllInnerTexts, readVisibleText } from "./locators.js";
 import { interpretYouAreUp, parseClockSeconds, parseOverallPickLenient } from "./parse.js";
@@ -22,7 +22,7 @@ export class CBSReader {
   constructor(
     private readonly page: Page,
     private readonly selectors: SelectorConfig,
-    private readonly league: LeagueConfig
+    private league: LeagueConfig
   ) {}
 
   async assertDraftRoom(): Promise<void> {
@@ -35,9 +35,17 @@ export class CBSReader {
       throw new Error(`Live CBS reader refused fixture URL: ${url}`);
     }
     assertAllowedCbsUrl(url);
+    if (!looksLikeCbsDraftRoom(url)) {
+      throw new Error(`Unexpected CBS URL: ${url}`);
+    }
+    if (hostnameOf(url).includes("mockdraft")) return;
     if (!url.includes(this.selectors.draftRoomUrlPattern)) {
       throw new Error(`Unexpected CBS URL: ${url}`);
     }
+  }
+
+  updateLeague(league: LeagueConfig): void {
+    this.league = league;
   }
 
   async readLiveSnapshot(players: SportslinePlayer[]): Promise<LiveDraftSnapshot> {
@@ -80,9 +88,16 @@ export class CBSReader {
     const results = await this.readDraftResults();
     const roster = await this.readUserRosterNames();
     const resync = resyncFromDraftResults([], results, players);
-    const isUserTurn = youAreUp && teamOnClock === this.league.userTeamName;
+    const waitingToStart = /waiting for start/i.test(teamOnClock ?? "");
+    const isUserTurn = this.league.inferUserTeamFromYouAreUp
+      ? youAreUp && !waitingToStart
+      : youAreUp && teamOnClock === this.league.userTeamName;
     const conflicts = [...resync.conflicts];
-    if (youAreUp && teamOnClock !== this.league.userTeamName) {
+    if (
+      youAreUp &&
+      teamOnClock !== this.league.userTeamName &&
+      !this.league.inferUserTeamFromYouAreUp
+    ) {
       conflicts.push(
         `CBS "you are up" indicator is visible, but team on clock is "${teamOnClock}" rather than configured "${this.league.userTeamName}".`
       );
@@ -95,6 +110,7 @@ export class CBSReader {
         currentOverallPick: parseOverallPickLenient(currentPickRaw),
         teamOnClock,
         isUserTurn,
+        youAreUp,
         clockSecondsRemaining
       },
       results,
@@ -181,6 +197,7 @@ export class CBSReader {
 
     const rowLocator = this.page.locator(rows);
     const count = await rowLocator.count();
+    if (count === 0) return [];
     const results: LiveDraftResult[] = [];
     for (let i = 0; i < count; i += 1) {
       const row = rowLocator.nth(i);

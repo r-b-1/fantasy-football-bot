@@ -15,7 +15,10 @@
     "rank:fixture": "tsx src/index.ts rank-fixture",
     "decide:fixture": "tsx src/index.ts decide-fixture",
     "demo:replay": "tsx src/index.ts demo-replay",
+    "predict:fixture": "tsx src/index.ts predict-fixture",
     "cbs:monitor": "tsx src/index.ts cbs-monitor",
+    "cbs:recommend": "tsx src/index.ts cbs-recommend",
+    "cbs:mock": "tsx src/index.ts cbs-mock",
     "cbs:diagnose": "tsx src/index.ts cbs-diagnose",
     "cbs:fixture": "tsx src/index.ts cbs-fixture",
     "cbs:fixture-confirm": "tsx src/index.ts cbs-fixture-confirm"

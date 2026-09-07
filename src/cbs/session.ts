@@ -32,15 +32,36 @@ export async function closeSession(session: CBSSession): Promise<void> {
   if (session.browser) await session.browser.close();
 }
 
+export async function openAllowlistedUrl(page: Page, url: string): Promise<void> {
+  assertAllowedCbsUrl(url);
+  await page.goto(url, { waitUntil: "domcontentloaded" });
+  if (!isAllowedCbsUrl(page.url())) {
+    throw domainNotAllowed(page.url());
+  }
+}
+
 export async function openAllowlistedCbsPage(
   page: Page,
   draftRoomUrlPattern: string
 ): Promise<void> {
-  const target = leagueOrigin(draftRoomUrlPattern);
-  assertAllowedCbsUrl(target);
-  await page.goto(target, { waitUntil: "domcontentloaded" });
-  if (!isAllowedCbsUrl(page.url())) {
-    throw domainNotAllowed(page.url());
+  await openAllowlistedUrl(page, leagueOrigin(draftRoomUrlPattern));
+}
+
+export async function openLoggedInDraftRoom(options: {
+  profileDir: string;
+  startUrl: string;
+  preferredPattern?: string;
+  prompt: string;
+}): Promise<{ session: CBSSession; focused: { page: Page; urls: string[] } }> {
+  const session = await openCBSSession(options.profileDir);
+  try {
+    await openAllowlistedUrl(session.page, options.startUrl);
+    await waitForManualLogin(options.prompt);
+    const focused = await focusDraftRoomPage(session, options.preferredPattern);
+    return { session, focused };
+  } catch (error) {
+    await session.context.close();
+    throw error;
   }
 }
 

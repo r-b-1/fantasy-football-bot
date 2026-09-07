@@ -67,6 +67,8 @@ export interface LeagueConfig {
   rosterMaximums: Partial<Record<Position, number>>;
   executionMode: ExecutionMode;
   cbsExecutionEnabled: boolean;
+  /** When true, lock userTeamName / draft slot from the live YOU ARE UP state. */
+  inferUserTeamFromYouAreUp: boolean;
   notes: string[];
 }
 

@@ -1,10 +1,11 @@
 import "dotenv/config";
-import { rankFixture } from "./cli/rankFixture.js";
+import { rankFixture, predictFixture } from "./cli/rankFixture.js";
 import { renderReplayDemo } from "./cli/replayDemo.js";
 import { runCbsDiagnose } from "./cbs/diagnose.js";
 import { runFixtureConfirm } from "./cbs/fixtureConfirm.js";
 import { runFixtureMonitor } from "./cbs/fixtureMonitor.js";
 import { runCbsMonitor } from "./cbs/monitor.js";
+import { runCbsMockDraft, runCbsRecommend } from "./cbs/recommend.js";
 import { loadLeagueConfig, loadStrategyConfig } from "./config/load.js";
 import { loadSportslineWorkbook } from "./data/sportsline.js";
 import type { DraftState, LivePlayer } from "./domain/types.js";
@@ -113,6 +114,23 @@ async function main(): Promise<void> {
     console.log(output);
     return;
   }
+  if (command === "predict-fixture") {
+    const fixturePath = process.argv[3];
+    if (!fixturePath) {
+      console.error("Usage: npm run predict:fixture -- fixtures/pick-21.json");
+      process.exitCode = 2;
+      return;
+    }
+    const output = await predictFixture({
+      fixturePath,
+      leaguePath,
+      strategyPath,
+      sportslinePath,
+      useAI: !process.argv.includes("--no-ai")
+    });
+    console.log(output);
+    return;
+  }
   if (command === "demo-replay") {
     console.log(
       renderReplayDemo({
@@ -144,11 +162,19 @@ async function main(): Promise<void> {
     return;
   }
   if (command === "cbs-diagnose") {
-    await runCbsDiagnose();
+    await runCbsDiagnose({ mock: process.argv.includes("--mock") });
     return;
   }
   if (command === "cbs-monitor") {
     await runCbsMonitor();
+    return;
+  }
+  if (command === "cbs-recommend") {
+    await runCbsRecommend({ useAI: !process.argv.includes("--no-ai") });
+    return;
+  }
+  if (command === "cbs-mock") {
+    await runCbsMockDraft({ useAI: !process.argv.includes("--no-ai") });
     return;
   }
   throw new Error(`Unknown command: ${command}`);

@@ -1,14 +1,15 @@
 import { configConflict } from "../domain/errors.js";
-import type {
-  DraftFixture,
-  DraftPickEvent,
-  DraftState,
-  FixtureKeeper,
-  LeagueConfig,
-  LivePlayer,
-  Position,
-  SportslinePlayer,
-  StrategyConfig
+import {
+  POSITIONS,
+  type DraftFixture,
+  type DraftPickEvent,
+  type DraftState,
+  type FixtureKeeper,
+  type LeagueConfig,
+  type LivePlayer,
+  type Position,
+  type SportslinePlayer,
+  type StrategyConfig
 } from "../domain/types.js";
 import { requirePlayer } from "./identity.js";
 
@@ -30,6 +31,55 @@ export function toLivePlayers(
     ...player,
     available: !unavailableIds.has(player.id)
   }));
+}
+
+export function estimatedDraftRounds(league: LeagueConfig): number {
+  const starters = POSITIONS.reduce((sum, position) => sum + league.lineup[position], 0);
+  return starters + (league.benchSlots ?? 6);
+}
+
+/** 1-indexed snake slot inferred from an overall pick. */
+export function snakeDraftSlot(overallPick: number, teamCount: number): number {
+  const positionInRound = ((overallPick - 1) % teamCount) + 1;
+  const round = Math.ceil(overallPick / teamCount);
+  if (round % 2 === 1) return positionInRound;
+  return teamCount - positionInRound + 1;
+}
+
+export function snakeOverallPicks(draftSlot: number, teamCount: number, rounds: number): number[] {
+  const picks: number[] = [];
+  for (let round = 1; round <= rounds; round += 1) {
+    const pickInRound = round % 2 === 1 ? draftSlot : teamCount - draftSlot + 1;
+    picks.push((round - 1) * teamCount + pickInRound);
+  }
+  return picks;
+}
+
+export function applyLiveTurnIdentity(
+  league: LeagueConfig,
+  control: {
+    youAreUp: boolean;
+    teamOnClock: string | null;
+    currentOverallPick: number | null;
+  }
+): LeagueConfig {
+  if (!league.inferUserTeamFromYouAreUp) return league;
+  if (!control.youAreUp || !control.teamOnClock) return league;
+  if (/waiting for start/i.test(control.teamOnClock)) return league;
+
+  const next: LeagueConfig = {
+    ...league,
+    userTeamName: control.teamOnClock,
+    fantasyDisplayName: control.teamOnClock
+  };
+  if (control.currentOverallPick == null) return next;
+  const slot = snakeDraftSlot(control.currentOverallPick, league.teamCount);
+  return {
+    ...next,
+    draftSlot: slot,
+    knownOverallPicks: snakeOverallPicks(slot, league.teamCount, estimatedDraftRounds(league)),
+    knownPicksArePartial: false
+  };
 }
 
 export function recentPositionCounts(

@@ -49,6 +49,7 @@ describe("local fake draft room", () => {
     expect(snapshot.control.currentOverallPick).toBe(3);
     expect(snapshot.control.teamOnClock).toBe("Pickens My Jeanty");
     expect(snapshot.control.isUserTurn).toBe(true);
+    expect(snapshot.control.youAreUp).toBe(true);
     expect(snapshot.results.map((result) => result.playerName)).toEqual([
       "Jahmyr Gibbs",
       "Bijan Robinson"
