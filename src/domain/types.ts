@@ -182,3 +182,21 @@ export interface DraftFixture {
   keepers: FixtureKeeper[];
   drafted: FixturePick[];
 }
+
+export interface ProjectedPick {
+  playerId: string;
+  playerName: string;
+  position: Position;
+  expectedOverallPick: number;
+  confidence: number;
+  source: "ai" | "deterministic";
+  fallbackReason?: string;
+}
+
+export interface NextPicksProjection {
+  generatedAt: string;
+  currentOverallPick: number;
+  horizon: number;
+  projectedPicks: ProjectedPick[];
+  notes: string[];
+}

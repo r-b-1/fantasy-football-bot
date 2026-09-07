@@ -1,4 +1,11 @@
-import type { CandidateScore, DraftDecision, DraftState, LeagueConfig } from "../domain/types.js";
+import type {
+  CandidateScore,
+  DraftDecision,
+  DraftState,
+  LeagueConfig,
+  NextPicksProjection,
+  ProjectedPick
+} from "../domain/types.js";
 
 function pad(value: string, width: number): string {
   if (value.length === width) return value;
@@ -106,4 +113,29 @@ export function formatRecommendation(
     lines.push(`Risk flags: ${decision.riskFlags.join(", ")}`);
   }
   return lines.join("\n");
+}
+
+export interface FormattableProjection extends NextPicksProjection {
+  source?: ProjectedPick["source"];
+}
+
+export function formatProjection(projection: FormattableProjection): string {
+  const sourceLabel = projection.source ?? "unknown";
+  const header = [
+    `PROJECTED NEXT ${projection.horizon} PICKS — current overall pick ${projection.currentOverallPick} (${sourceLabel})`,
+    ...projection.notes.map((note) => `  ${note}`)
+  ];
+  if (projection.projectedPicks.length === 0) {
+    return [...header, "  (no projection available)"].join("\n");
+  }
+  const rows = projection.projectedPicks.map((pick, index) =>
+    [
+      pad(String(index + 1), 3),
+      pad(pick.playerName, 22),
+      pad(pick.position, 4),
+      pad(`#${pick.expectedOverallPick}`, 7),
+      pad(`(${pick.confidence.toFixed(2)})`, 9)
+    ].join(" ")
+  );
+  return [...header, ...rows].join("\n");
 }

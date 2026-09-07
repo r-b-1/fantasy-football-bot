@@ -32,7 +32,7 @@ export function toLivePlayers(
   }));
 }
 
-function recentPositionCounts(
+export function recentPositionCounts(
   events: DraftPickEvent[],
   window: number
 ): Partial<Record<Position, number>> {

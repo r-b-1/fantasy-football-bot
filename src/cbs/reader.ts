@@ -1,7 +1,7 @@
 import type { Page } from "playwright";
 import type { DraftState, LeagueConfig, LivePlayer, SportslinePlayer } from "../domain/types.js";
 import { requirePlayer } from "../engine/identity.js";
-import { nextUserOverallPick } from "../engine/state.js";
+import { nextUserOverallPick, recentPositionCounts } from "../engine/state.js";
 import { assertAllowedCbsUrl, assertAllowedFixtureUrl } from "./allowlist.js";
 import { selectorsUnconfigured } from "./errors.js";
 import { isVisible, readAllInnerTexts, readVisibleText } from "./locators.js";
@@ -104,7 +104,10 @@ export class CBSReader {
     };
   }
 
-  async readDraftState(players: SportslinePlayer[]): Promise<DraftState> {
+  async readDraftState(
+    players: SportslinePlayer[],
+    options: { recentPickWindow?: number } = {}
+  ): Promise<DraftState> {
     const snapshot = await this.readLiveSnapshot(players);
     const resync = resyncFromDraftResults([], snapshot.results, players, snapshot.capturedAt);
     const keeperIds = this.league.keepers.map(
@@ -153,7 +156,7 @@ export class CBSReader {
       availablePlayerIds: new Set(
         players.filter((player) => !takenIds.has(player.id)).map((player) => player.id)
       ),
-      recentPositionCounts: {},
+      recentPositionCounts: recentPositionCounts(resync.events, options.recentPickWindow ?? 8),
       warnings: snapshot.conflicts
     };
   }

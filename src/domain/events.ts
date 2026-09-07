@@ -46,6 +46,23 @@ export const DraftLogEventSchema = z.discriminatedUnion("type", [
     ts: z.string()
   }),
   z.object({
+    type: z.literal("projection"),
+    overallPick: z.number().int().positive(),
+    horizon: z.number().int().positive(),
+    source: z.enum(["ai", "deterministic"]),
+    picks: z.array(
+      z.object({
+        playerId: z.string(),
+        playerName: z.string(),
+        position: PositionSchema,
+        expectedOverallPick: z.number().int().positive(),
+        confidence: z.number()
+      })
+    ),
+    fallbackReason: z.string().optional(),
+    ts: z.string()
+  }),
+  z.object({
     type: z.literal("pick_submitted"),
     overallPick: z.number().int().positive(),
     candidateId: z.string(),
