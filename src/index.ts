@@ -4,6 +4,7 @@ import { renderReplayDemo } from "./cli/replayDemo.js";
 import { runCbsDiagnose } from "./cbs/diagnose.js";
 import { runFixtureConfirm } from "./cbs/fixtureConfirm.js";
 import { runFixtureMonitor } from "./cbs/fixtureMonitor.js";
+import { runFixtureProjection } from "./cbs/fixtureProjection.js";
 import { runCbsMonitor } from "./cbs/monitor.js";
 import { runCbsMockDraft, runCbsRecommend } from "./cbs/recommend.js";
 import { loadLeagueConfig, loadStrategyConfig } from "./config/load.js";
@@ -158,6 +159,14 @@ async function main(): Promise<void> {
       autoConfirm: process.argv.includes("--auto-confirm"),
       everyPickIsUser,
       untilPick: Number(process.env.FIXTURE_UNTIL_PICK ?? (everyPickIsUser ? "10" : "35"))
+    });
+    return;
+  }
+  if (command === "cbs-fixture-projection") {
+    await runFixtureProjection({
+      headless: process.argv.includes("--headless"),
+      useAI: !process.argv.includes("--no-ai"),
+      untilPick: Number(process.env.FIXTURE_UNTIL_PICK ?? "0")
     });
     return;
   }

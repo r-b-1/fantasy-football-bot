@@ -21,7 +21,8 @@
     "cbs:mock": "tsx src/index.ts cbs-mock",
     "cbs:diagnose": "tsx src/index.ts cbs-diagnose",
     "cbs:fixture": "tsx src/index.ts cbs-fixture",
-    "cbs:fixture-confirm": "tsx src/index.ts cbs-fixture-confirm"
+    "cbs:fixture-confirm": "tsx src/index.ts cbs-fixture-confirm",
+    "cbs:fixture-projection": "tsx src/index.ts cbs-fixture-projection"
   },
   "dependencies": {
     "dotenv": "^16.6.1",

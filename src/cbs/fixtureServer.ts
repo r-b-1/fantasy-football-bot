@@ -7,14 +7,23 @@ const ALLOWED: Record<string, { file: string; type: string }> = {
     file: path.join("fixtures", "cbs", "fixture-draft-room.html"),
     type: "text/html; charset=utf-8"
   },
+  "/fixture-draft-room-rich": {
+    file: path.join("fixtures", "cbs", "fixture-draft-room-rich.html"),
+    type: "text/html; charset=utf-8"
+  },
   "/pick-35.json": {
     file: path.join("fixtures", "pick-35.json"),
+    type: "application/json; charset=utf-8"
+  },
+  "/fixture-16team-rich.json": {
+    file: path.join("fixtures", "fixture-16team-rich.json"),
     type: "application/json; charset=utf-8"
   }
 };
 
 export interface FixtureServer {
   url: string;
+  richUrl: string;
   port: number;
   close: () => Promise<void>;
 }
@@ -46,6 +55,7 @@ export function startFixtureServer(rootDir = process.cwd()): Promise<FixtureServ
       resolve({
         port: address.port,
         url: `http://127.0.0.1:${address.port}/fixture-draft-room`,
+        richUrl: `http://127.0.0.1:${address.port}/fixture-draft-room-rich`,
         close: () =>
           new Promise((closeResolve, closeReject) => {
             server.close((error) => (error ? closeReject(error) : closeResolve()));
