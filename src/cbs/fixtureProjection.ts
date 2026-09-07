@@ -1,10 +1,11 @@
 import { loadLeagueConfig, loadStrategyConfig } from "../config/load.js";
-import { loadRosterGrid, type RosterGrid } from "../data/rosterGrid.js";
+import { loadRosterGrid } from "../data/rosterGrid.js";
 import { loadSportslineWorkbook } from "../data/sportsline.js";
 import { predictNextPicks } from "../ai/predict.js";
 import { formatProjection } from "../cli/format.js";
-import fs from "node:fs";
-import type { LivePlayer, Position } from "../domain/types.js";
+import type { LivePlayer } from "../domain/types.js";
+import { playerKey } from "../data/normalize.js";
+import { loadRichFixtureScript } from "./fixtureData.js";
 import { isAllowedCbsUrl } from "./allowlist.js";
 import { startFixtureServer } from "./fixtureServer.js";
 import { CBSReader } from "./reader.js";
@@ -12,17 +13,6 @@ import { assertFixtureSelectorConfig, loadSelectorConfig } from "./selectors.js"
 import { closeSession, openEphemeralBrowser } from "./session.js";
 import { appendEvent } from "../state/eventLog.js";
 import { toLivePlayers } from "../engine/state.js";
-
-interface RichFixtureScript {
-  keepers: Array<{ name: string; position: Position; fantasyTeam: string }>;
-  teams?: string[];
-  autopickPool?: Array<{ name: string; position: Position; _skip?: boolean }>;
-  userDraftSlots?: number[];
-}
-
-function loadRichFixtureScript(path: string): RichFixtureScript {
-  return JSON.parse(fs.readFileSync(path, "utf8")) as RichFixtureScript;
-}
 
 export interface ProjectOptionConfig {
   headless?: boolean;
@@ -35,13 +25,12 @@ export interface ProjectOptionConfig {
 export async function runFixtureProjection(options: ProjectOptionConfig = {}): Promise<void> {
   const league = loadLeagueConfig(process.env.LEAGUE_CONFIG ?? "config/league.current.json");
   const strategy = loadStrategyConfig(process.env.STRATEGY_CONFIG ?? "config/strategy.current.json");
+  const richScript = loadRichFixtureScript();
   const players: LivePlayer[] = toLivePlayers(
     loadSportslineWorkbook(process.env.SPORTSLINE_XLSX ?? "data/reference/cheatsheet_cbsppr12.xlsx"),
-    new Set()
+    new Set(richScript.keepers.map((keeper) => playerKey(keeper.name, keeper.position)))
   );
   const rosterGrid = league.rosterGridPath ? loadRosterGrid(league.rosterGridPath) : undefined;
-  const richScriptPath = process.env.RICH_FIXTURE ?? "fixtures/fixture-16team-rich.json";
-  const richScript = loadRichFixtureScript(richScriptPath);
   const selectors = loadSelectorConfig("config/selectors.fixture.json");
   assertFixtureSelectorConfig(selectors);
 

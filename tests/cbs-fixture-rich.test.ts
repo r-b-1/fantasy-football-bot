@@ -53,5 +53,10 @@ describe("rich local fake draft room (16-team)", () => {
     expect(results.some((r) => r.fantasyTeam === "Gibbs me a win"), "slot 2").toBe(true);
     expect(results.some((r) => r.fantasyTeam === "Chase'n my Puka"), "slot 4").toBe(true);
     expect(new Set(results.map((r) => r.fantasyTeam)).size).toBeGreaterThanOrEqual(2);
+    const keeperNames = await session.page.evaluate(() =>
+      (window as unknown as { __script: { keepers: Array<{ name: string }> } }).__script.keepers.map((keeper) => keeper.name)
+    );
+    expect(results.every((result) => !keeperNames.includes(result.playerName))).toBe(true);
+    expect(results[0]?.playerName).toBe("Josh Jacobs");
   });
 });

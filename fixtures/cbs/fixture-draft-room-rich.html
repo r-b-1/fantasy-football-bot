@@ -85,6 +85,10 @@
     const confirmBtn = document.getElementById("draft-confirmation");
     const pendingEl = document.getElementById("pending");
 
+    function nameKey(name) {
+      return name.normalize("NFKD").toLowerCase().replace(/[^a-z0-9]/g, "");
+    }
+
     function fmt(seconds) {
       const s = Math.max(0, Math.floor(seconds));
       return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
@@ -130,7 +134,7 @@
 
     function showPick(script, overallPick, seconds, results) {
       const slot = snakeSlot(overallPick, script.teams.length);
-      const team = script.teams[slot - 1];
+      const team = script.pickOwners?.[overallPick] ?? script.teams[slot - 1];
       currentPickEl.textContent = String(overallPick);
       teamEl.textContent = team;
       roundEl.textContent = String(roundOf(overallPick, script.teams.length));
@@ -155,7 +159,7 @@
     function refreshConfirm(seconds) {
       const ours = window.__teamFor(window.__overallPick) === USER;
       const slot = snakeSlot(window.__overallPick, window.__teamCount);
-      const team = window.__teams[slot - 1];
+      const team = window.__teamFor(window.__overallPick);
       currentPickEl.textContent = String(window.__overallPick);
       teamEl.textContent = team;
       roundEl.textContent = String(roundOf(window.__overallPick, window.__teamCount));
@@ -184,7 +188,7 @@
       window.__runComplete = false;
       window.__teamFor = function (pick) {
         const slot = snakeSlot(pick, script.teams.length);
-        return script.teams[slot - 1];
+        return script.pickOwners?.[pick] ?? script.teams[slot - 1];
       };
       window.__maxPick = untilPick > 0 ? untilPick : Math.max(script.userDraftSlots?.[script.userDraftSlots.length - 1] ?? 16, 16);
 
@@ -192,6 +196,10 @@
         if (window.__teamFor(window.__overallPick) !== USER) return { ok: false, reason: "not user turn" };
         if (!playerName || !String(playerName).trim()) return { ok: false, reason: "missing player" };
         const name = String(playerName).trim();
+        const keeper = script.keepers.find((k) =>
+          [k.name, ...(k.aliases ?? [])].some((alias) => nameKey(alias) === nameKey(name))
+        );
+        if (keeper) return { ok: false, reason: "already kept", fantasyTeam: keeper.fantasyTeam };
         const taken = new Set(window.__results.map((r) => r.playerName.toLowerCase()));
         if (taken.has(name.toLowerCase())) return { ok: false, reason: "already drafted" };
         window.__pendingPlayer = name;
@@ -214,7 +222,10 @@
         return { ok: true };
       };
 
-      draftBtn.addEventListener("click", () => window.__fixtureDraft(searchInput.value));
+      draftBtn.addEventListener("click", () => {
+        const result = window.__fixtureDraft(searchInput.value);
+        if (!result.ok) pendingEl.textContent = "Cannot draft: " + result.reason;
+      });
       confirmBtn.addEventListener("click", () => window.__fixtureConfirm());
 
       refreshConfirm();
@@ -260,7 +271,11 @@
     }
 
     fetch("/fixture-16team-rich.json")
-      .then((r) => r.json())
+      .then(async (r) => {
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error ?? "Unable to load keeper data");
+        return data;
+      })
       .then((script) => run(script))
       .catch((err) => {
         document.querySelector(".sub").textContent = "Failed to load rich fixture JSON: " + err;

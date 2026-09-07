@@ -173,6 +173,25 @@ npm run cbs:recommend
 
 Do not put a CBS password in `.env`. The only optional secret is an OpenAI API key.
 
+## Manual Draft Companion
+
+Run a local second-screen companion beside your CBS draft room:
+
+```bash
+npm run companion
+```
+
+Open **http://localhost:4000/**. Use `COMPANION_PORT` to choose another port.
+
+- Start typing a player's first or last name. Arrow keys browse matches; Enter selects, then **Record pick** confirms. Press `/` to focus search.
+- The team on the clock is inferred from the configured snake order and pick assignments. Recording here never submits a pick to CBS.
+- Your shortlist, roster needs, upcoming picks, and draft log update after each recorded pick. Use **Why this player?** to inspect scoring details.
+- **League keepers** shows the full list. The configured `rosterGridPath` loads all 32 keepers by default; `COMPANION_ROSTERGRID_CSV` optionally overrides that path. The grid is authoritative, including Kenneth Walker III on F.A.F.O., and invalid keeper data is reported rather than silently ignored.
+- Switch between SportsLine and experimental FantasyPros mode without losing recorded picks. FantasyPros mode currently uses synthetic ECR-derived ratings plus SportsLine ADP, not pure ECR order; its CSV scoring format is unverified.
+- **Undo last pick** corrects an entry. **Reset draft** requires confirmation and preserves keeper initialization.
+
+Session state lives in server memory: browser refreshes retain picks, but restarting the server clears them. No automatic CBS connection or disk persistence is provided by this companion. Optional Google Fonts enhance the appearance; local fallback fonts keep the UI usable offline.
+
 ## Tests
 
 The test suite is the contract:

@@ -11,6 +11,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "fantasypros:preview": "tsx src/index.ts fantasypros-preview",
+    "fantasypros:compare": "tsx src/index.ts fantasypros-rankings",
     "rank:demo": "tsx src/index.ts rank-demo",
     "rank:fixture": "tsx src/index.ts rank-fixture",
     "decide:fixture": "tsx src/index.ts decide-fixture",
@@ -22,7 +24,8 @@
     "cbs:diagnose": "tsx src/index.ts cbs-diagnose",
     "cbs:fixture": "tsx src/index.ts cbs-fixture",
     "cbs:fixture-confirm": "tsx src/index.ts cbs-fixture-confirm",
-    "cbs:fixture-projection": "tsx src/index.ts cbs-fixture-projection"
+    "cbs:fixture-projection": "tsx src/index.ts cbs-fixture-projection",
+    "companion": "tsx src/index.ts companion"
   },
   "dependencies": {
     "dotenv": "^16.6.1",

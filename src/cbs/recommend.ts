@@ -9,6 +9,7 @@ import { recommendTurn, shouldRecommendForTurn } from "../engine/recommend.js";
 import { shouldProjectForTurn } from "../engine/predict.js";
 import { predictNextPicks } from "../ai/predict.js";
 import { formatProjection } from "../cli/format.js";
+import { draftStateForOnClockTeam } from "../engine/onClockPreview.js";
 import { appendEvent } from "../state/eventLog.js";
 import {
   DEFAULT_CBS_MOCK_DRAFT_URL,
@@ -18,6 +19,7 @@ import {
   looksLikeCbsDraftRoom
 } from "./allowlist.js";
 import { CbsError } from "./errors.js";
+import { EngineError } from "../domain/errors.js";
 import { probeSelector } from "./locators.js";
 import { formatClockSeconds, formatOnClockStatus } from "./parse.js";
 import { CBSReader } from "./reader.js";
@@ -170,6 +172,9 @@ export async function runCbsRecommend(options: LiveRecommendOptions = {}): Promi
     console.log(
       `RECOMMEND MODE — no clicks. ${useAI ? "OpenAI will rank the shortlist when a key is present." : "Deterministic engine only."}`
     );
+    console.log(
+      "While another team is on the clock, you'll see their likely pick in the same banner you'll get on your turn."
+    );
     console.log("Ctrl+C to stop. You must make the pick in CBS yourself.");
 
     await runRecommendPollLoop({
@@ -216,6 +221,7 @@ export async function runRecommendPollLoop(args: {
   keepers?: LeagueKeeper[];
   onRecommendation?: (overallPick: number) => void;
   onProjection?: (overallPick: number) => void;
+  onOnClockPreview?: (info: { overallPick: number; teamName: string; output: string }) => void;
 }): Promise<void> {
   const reader = new CBSReader(args.page, args.selectors, args.league);
   let league = args.league;
@@ -321,12 +327,48 @@ export async function runRecommendPollLoop(args: {
         const state = await reader.readDraftState(args.players, {
           recentPickWindow: args.strategy.recentPickWindow
         });
+        const teamOnClock = snapshot.control.teamOnClock;
+        if (teamOnClock && !/waiting for start/i.test(teamOnClock)) {
+          const previewState = draftStateForOnClockTeam({
+            state,
+            teamName: teamOnClock,
+            league,
+            players: args.players,
+            keepers: args.keepers,
+            rosterGrid: args.rosterGrid
+          });
+          try {
+            const preview = await recommendTurn({
+              players: args.players,
+              state: previewState,
+              league,
+              strategy: args.strategy,
+              useAI: args.useAI,
+              previewForTeam: teamOnClock,
+              explain: "top"
+            });
+            console.log(preview.output);
+            args.onOnClockPreview?.({
+              overallPick: projectTurn,
+              teamName: teamOnClock,
+              output: preview.output
+            });
+          } catch (error) {
+            if (error instanceof EngineError && error.kind === "no_candidates") {
+              console.log(
+                `LIKELY PICK FOR ${teamOnClock} — no eligible candidates from the current pool.`
+              );
+            } else {
+              throw error;
+            }
+          }
+        }
         const projected = await predictNextPicks({
           players: livePlayers,
           state,
           league,
           strategy: args.strategy,
-          useAI: args.useAI,
+          useAI: false,
           rosterGrid: args.rosterGrid,
           keepers: args.keepers
         });

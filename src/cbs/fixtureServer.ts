@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
+import { loadRichFixtureScript } from "./fixtureData.js";
 
 const ALLOWED: Record<string, { file: string; type: string }> = {
   "/fixture-draft-room": {
@@ -38,6 +39,17 @@ export function startFixtureServer(rootDir = process.cwd()): Promise<FixtureServ
       return;
     }
     const filePath = path.join(rootDir, route.file);
+    if (url.pathname === "/fixture-16team-rich.json") {
+      try {
+        const script = loadRichFixtureScript(rootDir);
+        res.writeHead(200, { "content-type": route.type, "cache-control": "no-store" });
+        res.end(JSON.stringify(script));
+      } catch (error) {
+        res.writeHead(500, { "content-type": route.type, "cache-control": "no-store" });
+        res.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
+      }
+      return;
+    }
     res.writeHead(200, {
       "content-type": route.type,
       "cache-control": "no-store"

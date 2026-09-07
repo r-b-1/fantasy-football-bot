@@ -13,6 +13,9 @@ import type { DraftState, LivePlayer } from "./domain/types.js";
 import { generateShortlist } from "./engine/shortlist.js";
 import { nextUserOverallPick } from "./engine/state.js";
 import { formatShortlist } from "./cli/format.js";
+import { previewFantasyPros } from "./cli/fantasyPros.js";
+import { previewFantasyProsRankings } from "./cli/fantasyProsRankings.js";
+import { startCompanionServer } from "./companion/server.js";
 
 const leaguePath = process.env.LEAGUE_CONFIG ?? "config/league.current.json";
 const strategyPath = process.env.STRATEGY_CONFIG ?? "config/strategy.current.json";
@@ -76,6 +79,14 @@ function rankDemo(): void {
 
 async function main(): Promise<void> {
   const command = process.argv[2] ?? "rank-demo";
+  if (command === "fantasypros-preview") {
+    await previewFantasyPros(process.argv.slice(3));
+    return;
+  }
+  if (command === "fantasypros-rankings") {
+    previewFantasyProsRankings(process.argv.slice(3));
+    return;
+  }
   if (command === "rank-demo") {
     rankDemo();
     return;
@@ -185,6 +196,11 @@ async function main(): Promise<void> {
   }
   if (command === "cbs-mock") {
     await runCbsMockDraft({ useAI: !process.argv.includes("--no-ai") });
+    return;
+  }
+  if (command === "companion") {
+    const port = Number(process.env.COMPANION_PORT ?? "4000");
+    await startCompanionServer(port);
     return;
   }
   throw new Error(`Unknown command: ${command}`);

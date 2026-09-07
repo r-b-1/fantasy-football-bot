@@ -104,6 +104,7 @@ export interface StrategyConfig {
   weights: StrategyWeights;
   earlyRoundPositionPenalties: Partial<Record<Position, number>>;
   kDstEligibleAfterOverallPick: number;
+  qbBackupEligibleAfterOverallPick?: number;
   byeOverlapPenalty: number;
   vorWeight: number;
   recentPickWindow: number;

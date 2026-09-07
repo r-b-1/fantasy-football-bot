@@ -13,12 +13,6 @@ export interface LeagueKeeper {
 
 const PositionSchema = z.enum(POSITIONS);
 
-export interface LeagueKeeper {
-  fantasyTeam: string;
-  playerName: string;
-  position: Position;
-}
-
 const JsonKeeperSchema = z.object({
   fantasyTeam: z.string().min(1),
   name: z.string().min(1).optional(),

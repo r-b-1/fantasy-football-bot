@@ -37,6 +37,7 @@ describe("recommend poll loop projection", () => {
     const players = loadSportslineWorkbook("data/reference/cheatsheet_cbsppr12.xlsx");
     const projected: number[] = [];
     const recommended: number[] = [];
+    const previews: Array<{ overallPick: number; teamName: string; output: string }> = [];
     await runRecommendPollLoop({
       page: session.page,
       selectors,
@@ -50,9 +51,15 @@ describe("recommend poll loop projection", () => {
       intervalMs: 80,
       untilPick: 2,
       onProjection: (overallPick) => projected.push(overallPick),
-      onRecommendation: (overallPick) => recommended.push(overallPick)
+      onRecommendation: (overallPick) => recommended.push(overallPick),
+      onOnClockPreview: (info) => previews.push(info)
     });
     expect(projected).toEqual([2]);
     expect(recommended).toEqual([]);
+    expect(previews).toHaveLength(1);
+    expect(previews[0]?.teamName).toBe("Gibbs me a win");
+    expect(previews[0]?.output).toMatch(/LIKELY PICK FOR Gibbs me a win/);
+    expect(previews[0]?.output).toMatch(/Mode: RECOMMEND/);
+    expect(previews[0]?.output).toMatch(/Fallback:/);
   });
 });

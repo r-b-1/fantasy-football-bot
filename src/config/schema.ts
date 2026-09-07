@@ -90,6 +90,7 @@ export const StrategyConfigSchema = z.object({
     DST: z.number().nonnegative().optional()
   }),
   kDstEligibleAfterOverallPick: z.number().int().nonnegative().default(130),
+  qbBackupEligibleAfterOverallPick: z.number().int().nonnegative().default(80),
   byeOverlapPenalty: z.number().nonnegative().default(6),
   vorWeight: z.number().nonnegative().default(0),
   recentPickWindow: z.number().int().positive().default(8),
